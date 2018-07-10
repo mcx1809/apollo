@@ -30,7 +30,7 @@ namespace {
 
 // Minimum error in lane segmentation.
 const double kSegmentationEpsilon = 0.2;
-}
+}  // namespace
 
 const std::string &RouteSegments::Id() const { return id_; }
 
@@ -110,6 +110,12 @@ bool RouteSegments::IsOnSegment() const { return is_on_segment_; }
 
 void RouteSegments::SetIsOnSegment(bool on_segment) {
   is_on_segment_ = on_segment;
+}
+
+bool RouteSegments::IsNeighborSegment() const { return is_neighbor_; }
+
+void RouteSegments::SetIsNeighborSegment(bool is_neighbor) {
+  is_neighbor_ = is_neighbor;
 }
 
 void RouteSegments::SetRouteEndWaypoint(const LaneWaypoint &waypoint) {

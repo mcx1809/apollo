@@ -105,8 +105,9 @@ bool ReferenceLineInfo::Init(const std::vector<const Obstacle*>& obstacles) {
     path_decision_.SetCIPVInfo(cipv_info);
   }
   // set lattice planning target speed limit;
-  double cruise_speed = std::min(FLAGS_speed_upper_bound,
-      reference_line().GetSpeedLimitFromS(adc_sl_boundary_.end_s()));
+  double cruise_speed =
+      std::min(FLAGS_speed_upper_bound,
+               reference_line().GetSpeedLimitFromS(adc_sl_boundary_.end_s()));
   SetCruiseSpeed(std::min(FLAGS_default_cruise_speed, cruise_speed));
   is_inited_ = true;
   return true;
@@ -365,6 +366,10 @@ bool ReferenceLineInfo::IsDrivable() const { return is_drivable_; }
 
 bool ReferenceLineInfo::IsChangeLanePath() const {
   return !Lanes().IsOnSegment();
+}
+
+bool ReferenceLineInfo::IsNeighborLanePath() const {
+  return Lanes().IsNeighborSegment();
 }
 
 std::string ReferenceLineInfo::PathSpeedDebugString() const {

@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2017 The Apollo Authors. All Rights Reserved.
+ * Copyright 2018 The Apollo Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,18 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/planning/planner/em/em_planner.h"
+/**
+ * @file
+ * @brief This file provides the implementation of the class "NaviPlanner".
+ */
 
-#include <fstream>
+#include "modules/planning/planner/navi/navi_planner.h"
+
+#include <algorithm>
 #include <limits>
+#include <memory>
 #include <utility>
+#include <vector>
 
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/log.h"
@@ -32,14 +39,14 @@
 #include "modules/planning/common/frame.h"
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/constraint_checker/constraint_checker.h"
-#include "modules/planning/tasks/dp_poly_path/dp_poly_path_optimizer.h"
-#include "modules/planning/tasks/dp_st_speed/dp_st_speed_optimizer.h"
-#include "modules/planning/tasks/path_decider/path_decider.h"
-#include "modules/planning/tasks/poly_st_speed/poly_st_speed_optimizer.h"
-#include "modules/planning/tasks/qp_spline_path/qp_spline_path_optimizer.h"
-#include "modules/planning/tasks/qp_spline_st_speed/qp_spline_st_speed_optimizer.h"
-#include "modules/planning/tasks/speed_decider/speed_decider.h"
+#include "modules/planning/navi/decider/navi_obstacle_decider.h"
+#include "modules/planning/navi/decider/navi_path_decider.h"
+#include "modules/planning/navi/decider/navi_speed_decider.h"
 
+/**
+ * @namespace apollo::planning
+ * @brief apollo::planning
+ */
 namespace apollo {
 namespace planning {
 
@@ -58,26 +65,28 @@ constexpr double kSpeedOptimizationFallbackClost = 2e4;
 constexpr double kStraightForwardLineCost = 10.0;
 }  // namespace
 
-void EMPlanner::RegisterTasks() {
-  task_factory_.Register(DP_POLY_PATH_OPTIMIZER,
-                         []() -> Task* { return new DpPolyPathOptimizer(); });
-  task_factory_.Register(PATH_DECIDER,
-                         []() -> Task* { return new PathDecider(); });
-  task_factory_.Register(DP_ST_SPEED_OPTIMIZER,
-                         []() -> Task* { return new DpStSpeedOptimizer(); });
-  task_factory_.Register(SPEED_DECIDER,
-                         []() -> Task* { return new SpeedDecider(); });
-  task_factory_.Register(QP_SPLINE_ST_SPEED_OPTIMIZER, []() -> Task* {
-    return new QpSplineStSpeedOptimizer();
-  });
-  task_factory_.Register(POLY_ST_SPEED_OPTIMIZER,
-                         []() -> Task* { return new PolyStSpeedOptimizer(); });
+void NaviPlanner::RegisterTasks() {
+  task_factory_.Register(NAVI_PATH_DECIDER,
+                         []() -> Task* { return new NaviPathDecider(); });
+  task_factory_.Register(NAVI_SPEED_DECIDER,
+                         []() -> Task* { return new NaviSpeedDecider(); });
+  // task_factory_.Register(NAVI_OBSTACLE_DECIDER,
+  //                        []() -> Task* { return new NaviObstacleDecider();
+  //                        });
 }
 
-Status EMPlanner::Init(const PlanningConfig& config) {
-  AINFO << "In EMPlanner::Init()";
+Status NaviPlanner::Init(const PlanningConfig& config) {
+  // NaviPlanner is only used in navigation mode based on the real-time relative
+  // map.
+  if (!FLAGS_use_navigation_mode) {
+    std::string msg = "NaviPlanner is only used in navigation mode.";
+    AERROR << msg;
+    return Status(ErrorCode::PLANNING_ERROR, msg);
+  }
+
+  AINFO << "In NaviPlanner::Init()";
   RegisterTasks();
-  for (const auto task : config.em_planner_config().task()) {
+  for (const auto task : config.navi_planner_config().task()) {
     tasks_.emplace_back(
         task_factory_.CreateObject(static_cast<TaskType>(task)));
     AINFO << "Created task:" << tasks_.back()->Name();
@@ -93,7 +102,145 @@ Status EMPlanner::Init(const PlanningConfig& config) {
   return Status::OK();
 }
 
-void EMPlanner::RecordObstacleDebugInfo(
+Status NaviPlanner::Plan(const TrajectoryPoint& planning_init_point,
+                         Frame* frame) {
+  // NaviPlanner is only used in navigation mode based on the real-time relative
+  // map.
+  if (!FLAGS_use_navigation_mode) {
+    std::string msg = "NaviPlanner is only used in navigation mode.";
+    AERROR << msg;
+    return Status(ErrorCode::PLANNING_ERROR, msg);
+  }
+
+  std::size_t success_line_count = 0;
+  bool disable_low_priority_path = false;
+  for (auto& reference_line_info : frame->reference_line_info()) {
+    if (disable_low_priority_path) {
+      reference_line_info.SetDrivable(false);
+    }
+    if (!reference_line_info.IsDrivable()) {
+      continue;
+    }
+    auto status =
+        PlanOnReferenceLine(planning_init_point, frame, &reference_line_info);
+
+    if (status.ok() && reference_line_info.IsDrivable()) {
+      success_line_count += 1;
+      if (FLAGS_prioritize_change_lane &&
+          reference_line_info.IsChangeLanePath() &&
+          reference_line_info.IsNeighborLanePath() &&
+          reference_line_info.Cost() < kStraightForwardLineCost) {
+        disable_low_priority_path = true;
+      }
+    } else {
+      reference_line_info.SetDrivable(false);
+      if (reference_line_info.IsChangeLanePath() &&
+          reference_line_info.IsNeighborLanePath()) {
+        AERROR << "Planner failed to change lane to "
+               << reference_line_info.Lanes().Id();
+      } else {
+        AERROR << "Planner failed to " << reference_line_info.Lanes().Id();
+      }
+    }
+  }
+
+  if (success_line_count > 0) {
+    return Status::OK();
+  }
+  return Status(ErrorCode::PLANNING_ERROR,
+                "Failed to plan on any reference line.");
+}
+
+Status NaviPlanner::PlanOnReferenceLine(
+    const TrajectoryPoint& planning_init_point, Frame* frame,
+    ReferenceLineInfo* reference_line_info) {
+  if (!reference_line_info->IsChangeLanePath() &&
+      reference_line_info->IsNeighborLanePath()) {
+    reference_line_info->AddCost(kStraightForwardLineCost);
+  }
+  ADEBUG << "planning start point:" << planning_init_point.DebugString();
+  auto* heuristic_speed_data = reference_line_info->mutable_speed_data();
+  auto speed_profile =
+      GenerateInitSpeedProfile(planning_init_point, reference_line_info);
+  if (speed_profile.empty()) {
+    speed_profile = GenerateSpeedHotStart(planning_init_point);
+    ADEBUG << "Using dummy hot start for speed vector";
+  }
+  heuristic_speed_data->set_speed_vector(speed_profile);
+
+  auto ret = Status::OK();
+
+  for (auto& task : tasks_) {
+    const double start_timestamp = Clock::NowInSeconds();
+    ret = task->Execute(frame, reference_line_info);
+    if (!ret.ok()) {
+      AERROR << "Failed to run tasks[" << task->Name()
+             << "], Error message: " << ret.error_message();
+      break;
+    }
+    const double end_timestamp = Clock::NowInSeconds();
+    const double time_diff_ms = (end_timestamp - start_timestamp) * 1000;
+
+    ADEBUG << "after task " << task->Name() << ":"
+           << reference_line_info->PathSpeedDebugString() << std::endl;
+    ADEBUG << task->Name() << " time spend: " << time_diff_ms << " ms.";
+
+    RecordDebugInfo(reference_line_info, task->Name(), time_diff_ms);
+  }
+
+  RecordObstacleDebugInfo(reference_line_info);
+
+  if (reference_line_info->path_data().Empty()) {
+    ADEBUG << "Path fallback.";
+    GenerateFallbackPathProfile(reference_line_info,
+                                reference_line_info->mutable_path_data());
+    reference_line_info->AddCost(kPathOptimizationFallbackClost);
+  }
+
+  if (!ret.ok() || reference_line_info->speed_data().Empty()) {
+    ADEBUG << "Speed fallback.";
+    GenerateFallbackSpeedProfile(reference_line_info,
+                                 reference_line_info->mutable_speed_data());
+    reference_line_info->AddCost(kSpeedOptimizationFallbackClost);
+  }
+
+  DiscretizedTrajectory trajectory;
+  if (!reference_line_info->CombinePathAndSpeedProfile(
+          planning_init_point.relative_time(),
+          planning_init_point.path_point().s(), &trajectory)) {
+    std::string msg("Fail to aggregate planning trajectory.");
+    AERROR << msg;
+    return Status(ErrorCode::PLANNING_ERROR, msg);
+  }
+
+  for (const auto* path_obstacle :
+       reference_line_info->path_decision()->path_obstacles().Items()) {
+    if (path_obstacle->obstacle()->IsVirtual()) {
+      continue;
+    }
+    if (!path_obstacle->obstacle()->IsStatic()) {
+      continue;
+    }
+    if (path_obstacle->LongitudinalDecision().has_stop()) {
+      constexpr double kRefrenceLineStaticObsCost = 1e3;
+      reference_line_info->AddCost(kRefrenceLineStaticObsCost);
+    }
+  }
+
+  if (FLAGS_enable_trajectory_check) {
+    if (!ConstraintChecker::ValidTrajectory(trajectory)) {
+      std::string msg("Failed to validate current planning trajectory.");
+      AERROR << msg;
+      return Status(ErrorCode::PLANNING_ERROR, msg);
+    }
+  }
+
+  reference_line_info->SetTrajectory(trajectory);
+  reference_line_info->SetDrivable(true);
+  return Status::OK();
+}
+
+void NaviPlanner::RecordObstacleDebugInfo(
     ReferenceLineInfo* reference_line_info) {
   if (!FLAGS_enable_record_debug) {
     ADEBUG << "Skip record debug info";
@@ -121,9 +268,9 @@ void EMPlanner::RecordObstacleDebugInfo(
   }
 }
 
-void EMPlanner::RecordDebugInfo(ReferenceLineInfo* reference_line_info,
-                                const std::string& name,
-                                const double time_diff_ms) {
+void NaviPlanner::RecordDebugInfo(ReferenceLineInfo* reference_line_info,
+                                  const std::string& name,
+                                  const double time_diff_ms) {
   if (!FLAGS_enable_record_debug) {
     ADEBUG << "Skip record debug info";
     return;
@@ -140,120 +287,7 @@ void EMPlanner::RecordDebugInfo(ReferenceLineInfo* reference_line_info,
   ptr_stats->set_time_ms(time_diff_ms);
 }
 
-Status EMPlanner::Plan(const TrajectoryPoint& planning_start_point,
-                       Frame* frame) {
-  bool has_drivable_reference_line = false;
-  bool disable_low_priority_path = false;
-  auto status =
-      Status(ErrorCode::PLANNING_ERROR, "reference line not drivable");
-  for (auto& reference_line_info : frame->reference_line_info()) {
-    if (disable_low_priority_path) {
-      reference_line_info.SetDrivable(false);
-    }
-    if (!reference_line_info.IsDrivable()) {
-      continue;
-    }
-    auto cur_status =
-        PlanOnReferenceLine(planning_start_point, frame, &reference_line_info);
-    if (cur_status.ok() && reference_line_info.IsDrivable()) {
-      has_drivable_reference_line = true;
-      if (FLAGS_prioritize_change_lane &&
-          reference_line_info.IsChangeLanePath() &&
-          reference_line_info.Cost() < kStraightForwardLineCost) {
-        disable_low_priority_path = true;
-      }
-    } else {
-      reference_line_info.SetDrivable(false);
-    }
-  }
-  return has_drivable_reference_line ? Status::OK() : status;
-}
-
-Status EMPlanner::PlanOnReferenceLine(
-    const TrajectoryPoint& planning_start_point, Frame* frame,
-    ReferenceLineInfo* reference_line_info) {
-  if (!reference_line_info->IsChangeLanePath()) {
-    reference_line_info->AddCost(kStraightForwardLineCost);
-  }
-  ADEBUG << "planning start point:" << planning_start_point.DebugString();
-  auto* heuristic_speed_data = reference_line_info->mutable_speed_data();
-  auto speed_profile =
-      GenerateInitSpeedProfile(planning_start_point, reference_line_info);
-  if (speed_profile.empty()) {
-    speed_profile = GenerateSpeedHotStart(planning_start_point);
-    ADEBUG << "Using dummy hot start for speed vector";
-  }
-  heuristic_speed_data->set_speed_vector(speed_profile);
-
-  auto ret = Status::OK();
-
-  for (auto& optimizer : tasks_) {
-    const double start_timestamp = Clock::NowInSeconds();
-    ret = optimizer->Execute(frame, reference_line_info);
-    if (!ret.ok()) {
-      AERROR << "Failed to run tasks[" << optimizer->Name()
-             << "], Error message: " << ret.error_message();
-      break;
-    }
-    const double end_timestamp = Clock::NowInSeconds();
-    const double time_diff_ms = (end_timestamp - start_timestamp) * 1000;
-
-    ADEBUG << "after optimizer " << optimizer->Name() << ":"
-           << reference_line_info->PathSpeedDebugString() << std::endl;
-    ADEBUG << optimizer->Name() << " time spend: " << time_diff_ms << " ms.";
-
-    RecordDebugInfo(reference_line_info, optimizer->Name(), time_diff_ms);
-  }
-
-  RecordObstacleDebugInfo(reference_line_info);
-
-  if (reference_line_info->path_data().Empty()) {
-    ADEBUG << "Path fallback.";
-    GenerateFallbackPathProfile(reference_line_info,
-                                reference_line_info->mutable_path_data());
-    reference_line_info->AddCost(kPathOptimizationFallbackClost);
-  }
-
-  if (!ret.ok() || reference_line_info->speed_data().Empty()) {
-    ADEBUG << "Speed fallback.";
-    GenerateFallbackSpeedProfile(reference_line_info,
-                                 reference_line_info->mutable_speed_data());
-    reference_line_info->AddCost(kSpeedOptimizationFallbackClost);
-  }
-
-  DiscretizedTrajectory trajectory;
-  if (!reference_line_info->CombinePathAndSpeedProfile(
-          planning_start_point.relative_time(),
-          planning_start_point.path_point().s(), &trajectory)) {
-    std::string msg("Fail to aggregate planning trajectory.");
-    AERROR << msg;
-    return Status(ErrorCode::PLANNING_ERROR, msg);
-  }
-
-  for (const auto* path_obstacle :
-       reference_line_info->path_decision()->path_obstacles().Items()) {
-    if (path_obstacle->obstacle()->IsVirtual()) {
-      continue;
-    }
-    if (!path_obstacle->obstacle()->IsStatic()) {
-      continue;
-    }
-    if (path_obstacle->LongitudinalDecision().has_stop()) {
-      constexpr double kRefrenceLineStaticObsCost = 1e3;
-      reference_line_info->AddCost(kRefrenceLineStaticObsCost);
-    }
-  }
-
-  if (FLAGS_enable_trajectory_check) {
-    ConstraintChecker::ValidTrajectory(trajectory);
-  }
-
-  reference_line_info->SetTrajectory(trajectory);
-  reference_line_info->SetDrivable(true);
-  return Status::OK();
-}
-
-std::vector<SpeedPoint> EMPlanner::GenerateInitSpeedProfile(
+std::vector<SpeedPoint> NaviPlanner::GenerateInitSpeedProfile(
     const TrajectoryPoint& planning_init_point,
     const ReferenceLineInfo* reference_line_info) {
   std::vector<SpeedPoint> speed_profile;
@@ -318,7 +352,7 @@ std::vector<SpeedPoint> EMPlanner::GenerateInitSpeedProfile(
 }
 
 // This is a dummy simple hot start, need refine later
-std::vector<SpeedPoint> EMPlanner::GenerateSpeedHotStart(
+std::vector<SpeedPoint> NaviPlanner::GenerateSpeedHotStart(
     const TrajectoryPoint& planning_init_point) {
   std::vector<SpeedPoint> hot_start_speed_profile;
   double s = 0.0;
@@ -339,7 +373,7 @@ std::vector<SpeedPoint> EMPlanner::GenerateSpeedHotStart(
   return hot_start_speed_profile;
 }
 
-void EMPlanner::GenerateFallbackPathProfile(
+void NaviPlanner::GenerateFallbackPathProfile(
     const ReferenceLineInfo* reference_line_info, PathData* path_data) {
   auto adc_point = reference_line_info->AdcPlanningPoint();
   double adc_s = reference_line_info->AdcSlBoundary().end_s();
@@ -357,7 +391,7 @@ void EMPlanner::GenerateFallbackPathProfile(
   std::vector<common::PathPoint> path_points;
   for (double s = adc_s; s < max_s; s += unit_s) {
     const auto& ref_point =
-        reference_line_info->reference_line().GetReferencePoint(s);
+        reference_line_info->reference_line().GetReferencePoint(adc_s);
     common::PathPoint path_point = common::util::MakePathPoint(
         ref_point.x() + dx, ref_point.y() + dy, 0.0, ref_point.heading(),
         ref_point.kappa(), ref_point.dkappa(), 0.0);
@@ -365,10 +399,11 @@ void EMPlanner::GenerateFallbackPathProfile(
 
     path_points.push_back(std::move(path_point));
   }
+  path_data->SetReferenceLine(&(reference_line_info->reference_line()));
   path_data->SetDiscretizedPath(DiscretizedPath(std::move(path_points)));
 }
 
-void EMPlanner::GenerateFallbackSpeedProfile(
+void NaviPlanner::GenerateFallbackSpeedProfile(
     const ReferenceLineInfo* reference_line_info, SpeedData* speed_data) {
   *speed_data = GenerateStopProfileFromPolynomial(
       reference_line_info->AdcPlanningPoint().v(),
@@ -381,8 +416,8 @@ void EMPlanner::GenerateFallbackSpeedProfile(
   }
 }
 
-SpeedData EMPlanner::GenerateStopProfile(const double init_speed,
-                                         const double init_acc) const {
+SpeedData NaviPlanner::GenerateStopProfile(const double init_speed,
+                                           const double init_acc) const {
   AERROR << "Slowing down the car.";
   SpeedData speed_data;
 
@@ -426,7 +461,7 @@ SpeedData EMPlanner::GenerateStopProfile(const double init_speed,
   return speed_data;
 }
 
-SpeedData EMPlanner::GenerateStopProfileFromPolynomial(
+SpeedData NaviPlanner::GenerateStopProfileFromPolynomial(
     const double init_speed, const double init_acc) const {
   AERROR << "Slowing down the car with polynomial.";
   constexpr double kMaxT = 4.0;
@@ -452,7 +487,7 @@ SpeedData EMPlanner::GenerateStopProfileFromPolynomial(
   return SpeedData();
 }
 
-bool EMPlanner::IsValidProfile(const QuinticPolynomialCurve1d& curve) const {
+bool NaviPlanner::IsValidProfile(const QuinticPolynomialCurve1d& curve) const {
   for (double evaluate_t = 0.1; evaluate_t <= curve.ParamLength();
        evaluate_t += 0.2) {
     const double v = curve.Evaluate(1, evaluate_t);
