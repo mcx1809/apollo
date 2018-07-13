@@ -41,6 +41,7 @@ constexpr double kDefaultSStep = 1.0;
 constexpr double kDefaultSMax = 2.0;
 constexpr double kDefaultSafeDistanceRatio = 1.0;
 constexpr double kDefaultSafeDistanceBase = 2.0;
+constexpr double kInfinityValue = 100000000.0;
 }  // namespace
 
 static void CheckConstraints(const NaviSpeedTsConstraints& constraints) {
@@ -87,10 +88,6 @@ void NaviSpeedTsGraph::Reset(
   constraints_.resize(point_num);
 }
 
-double NaviSpeedTsGraph::Step() const { return s_step_; }
-
-std::size_t NaviSpeedTsGraph::PointNum() const { return constraints_.size(); }
-
 void NaviSpeedTsGraph::UpdateConstraints(
     const NaviSpeedTsConstraints& constraints) {
   CheckConstraints(constraints);
@@ -122,13 +119,14 @@ void NaviSpeedTsGraph::UpdateObstacleConstraints(double distance, double v) {
 }
 
 Status NaviSpeedTsGraph::Solve(double start_v, double start_a, double start_da,
-                               std::vector<NaviSpeedTsPoint>* points) {
-  CHECK_NOTNULL(points);
+                               std::vector<NaviSpeedTsPoint>* output) {
+  CHECK_NOTNULL(output);
 
-  points->resize(constraints_.size());
+  std::vector<NaviSpeedTsPoint> points;
+  points.resize(constraints_.size());
 
   // compute the first point
-  auto& point = (*points)[0];
+  auto& point = points[0];
   point.s = 0.0;
   point.t = 0.0;
   point.v = std::abs(start_v);
@@ -136,10 +134,10 @@ Status NaviSpeedTsGraph::Solve(double start_v, double start_a, double start_da,
   point.da = start_da;
 
   // compute the remaining points
-  for (size_t i = 1; i < points->size(); i++) {
-    const auto& prev = (*points)[i - 1];
+  for (size_t i = 1; i < points.size(); i++) {
+    const auto& prev = points[i - 1];
     const auto& constraints = constraints_[i];
-    auto& point = (*points)[i];
+    auto& point = points[i];
 
     // compute v_max base on v_max and a_max
     auto v_max = constraints.v_max;
@@ -161,7 +159,7 @@ Status NaviSpeedTsGraph::Solve(double start_v, double start_a, double start_da,
     // if t_max < t_min
     if (t_max < t_min) {
       AERROR << "failure to satisfy the constraints.";
-      points->resize(i);
+      points.resize(i);
       return Status(ErrorCode::PLANNING_ERROR,
                     "failure to satisfy the constraints.");
     }
@@ -180,7 +178,7 @@ Status NaviSpeedTsGraph::Solve(double start_v, double start_a, double start_da,
     }
 
     // compute t_preffered base on v_preffered and safe distance
-    auto t_preffered = prev.t + s_step_ / v_preffered;
+    auto t_preffered = prev.t + 2 * s_step_ / (prev.v + v_preffered);
     auto distance = get_safe_distance_(prev.v);
     auto s = prev.s + s_step_;
     auto d_idx = (s + distance) / s_step_;
@@ -194,16 +192,59 @@ Status NaviSpeedTsGraph::Solve(double start_v, double start_a, double start_da,
     point.s = s;
     point.t = Clamp(t_preffered, t_min, t_max);
     auto dt = point.t - prev.t;
-    // TODO(all): if v < 0
-    point.v = std::max(2 * s_step_ / dt - prev.v, 0.0);
+    point.v = 2.0 * s_step_ / dt - prev.v;
     point.a = (point.v - prev.v) / dt;
     point.da = (point.a - prev.a) / dt;
 
     // if t is infinity
     if (std::isinf(point.t)) {
-      points->resize(i + 1);
+      points.resize(i + 1);
       break;
     }
+  }
+
+  output->resize(points.size() - 1);
+  (*output)[0] = points[0];
+
+  // smooth v
+  for (size_t i = 1; i < points.size() - 1; i++) {
+    const auto& prev = points[i - 1];
+    const auto& next = points[i + 1];
+    auto& point = (*output)[i];
+
+    auto ds = next.s - prev.s;
+    auto dt = next.t - prev.t;
+    point.s = (prev.s + next.s) / 2.0;
+    point.t = (prev.t + next.t) / 2.0;
+    point.v = ds / dt;
+  }
+
+  // smooth a
+  for (size_t i = 1; i < points.size() - 1; i++) {
+    const auto& prev = points[i - 1];
+    const auto& next = points[i + 1];
+    auto& point = (*output)[i];
+
+    auto dt = next.t - prev.t;
+    point.a = (next.v - prev.v) / dt;
+  }
+
+  // smooth da
+  for (size_t i = 1; i < points.size() - 1; i++) {
+    const auto& prev = points[i - 1];
+    const auto& next = points[i + 1];
+    auto& point = (*output)[i];
+
+    auto dt = next.t - prev.t;
+    point.da = (next.a - prev.a) / dt;
+  }
+
+  for (auto& point : *output) {
+    point.s = std::min(kInfinityValue, point.s);
+    point.t = std::min(kInfinityValue, point.t);
+    point.v = std::min(kInfinityValue, point.v);
+    point.a = std::min(kInfinityValue, point.a);
+    point.da = std::min(kInfinityValue, point.da);
   }
 
   return Status::OK();

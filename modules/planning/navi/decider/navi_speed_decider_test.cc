@@ -42,13 +42,15 @@ TEST(NaviSpeedDeciderTest, CreateSpeedData) {
   NaviSpeedDecider speed_decider;
   speed_decider.preferred_speed_ = 10.0;
   speed_decider.max_speed_ = 20.0;
-  speed_decider.preferred_accel_ = 1.0;
-  speed_decider.preferred_decel_ = 1.0;
+  speed_decider.preferred_accel_ = 2.0;
+  speed_decider.preferred_decel_ = 2.0;
   speed_decider.max_accel_ = 5.0;
   speed_decider.max_decel_ = 5.0;
   speed_decider.obstacle_buffer_ = 1.0;
   speed_decider.safe_distance_base_ = 2.0;
   speed_decider.safe_distance_ratio_ = 1.0;
+  speed_decider.hard_speed_limit_ = 100.0;
+  speed_decider.hard_accel_limit_ = 10.0;
 
   PerceptionObstacle perception_obstacle;
   std::map<std::string, Obstacle> obstacle_buf;
@@ -64,11 +66,11 @@ TEST(NaviSpeedDeciderTest, CreateSpeedData) {
                               [&](const std::string& id) mutable {
                                 return &obstacle_buf[id];
                               },
-                              &speed_data));
+                              100, &speed_data));
 
   for (auto& p : speed_data.speed_vector()) {
-    if (p.s() > 25.0 && p.s() < 85.0) EXPECT_NEAR(10.0, p.v(), 1.0);
-    if (p.s() > 98.0) EXPECT_NEAR(0.0, p.v(), 0.01);
+    if (p.s() > 0.0 && p.s() < 24.0) EXPECT_NEAR(2.0, p.a(), 0.1);
+    if (p.s() > 25.0) EXPECT_NEAR(10.0, p.v(), 0.1);
   }
 }
 
@@ -83,6 +85,8 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
   speed_decider.obstacle_buffer_ = 1.0;
   speed_decider.safe_distance_base_ = 2.0;
   speed_decider.safe_distance_ratio_ = 1.0;
+  speed_decider.hard_speed_limit_ = 100.0;
+  speed_decider.hard_accel_limit_ = 10.0;
 
   PerceptionObstacle perception_obstacle;
   std::map<std::string, Obstacle> obstacle_buf;
@@ -109,10 +113,10 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
                               [&](const std::string& id) mutable {
                                 return &obstacle_buf[id];
                               },
-                              &speed_data));
+                              1000, &speed_data));
   for (auto& p : speed_data.speed_vector()) {
-    if (p.s() > 25.0 && p.s() < 30.0) EXPECT_NEAR(10.0, p.v(), 1.0);
-    if (p.s() > 41.8) EXPECT_NEAR(0.0, p.v(), 1.0);
+    if (p.s() > 34.0) EXPECT_GE(10.0, p.v());
+    if (p.s() > 40.0) EXPECT_NEAR(0.0, 1.0 / p.t(), 0.1);
   }
 }
 
@@ -127,6 +131,8 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
   speed_decider.obstacle_buffer_ = 1.0;
   speed_decider.safe_distance_base_ = 2.0;
   speed_decider.safe_distance_ratio_ = 1.0;
+  speed_decider.hard_speed_limit_ = 100.0;
+  speed_decider.hard_accel_limit_ = 10.0;
 
   PerceptionObstacle perception_obstacle;
   std::map<std::string, Obstacle> obstacle_buf;
@@ -164,11 +170,11 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
       speed_decider.MakeSpeedDecision(
           10.0, 0.0, 0.0, 100.0, path_data_points, obstacles,
           [&](const std::string& id) mutable { return &obstacle_buf[id]; },
-          &speed_data));
+          1000, &speed_data));
   for (auto& p : speed_data.speed_vector()) {
-    if (p.s() < 5.0) EXPECT_NEAR(10.0, p.v(), 1.0);
-    if (p.s() > 25.0 && p.s() < 35.0) EXPECT_NEAR(5.0, p.v(), 1.0);
-    if (p.s() > 40.8) EXPECT_NEAR(0.0, p.v(), 1.0);
+    if (p.s() < 3.0) EXPECT_NEAR(10.0, p.v(), 0.1);
+    if (p.s() > 25.0 && p.s() < 35.0) EXPECT_NEAR(5.0, p.v(), 0.5);
+    if (p.s() > 40.5) EXPECT_NEAR(0.0, p.v(), 0.1);
   }
 }
 

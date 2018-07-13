@@ -38,8 +38,9 @@ using apollo::common::VehicleConfigHelper;
 using apollo::common::util::MakePathPoint;
 
 namespace {
-constexpr double kTsGraphSStep = 0.1;
+constexpr double kTsGraphSStep = 0.4;
 constexpr double kTsGraphSMax = 200.0;
+constexpr size_t kSpeedPointNumLimit = 20;
 }  // namespace
 
 NaviSpeedDecider::NaviSpeedDecider() : Task("NaviSpeedDecider") {}
@@ -67,7 +68,14 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
             .has_safe_distance_ratio());
+  CHECK(config.navi_planner_config()
+            .navi_speed_decider_config()
+            .has_hard_speed_limit());
+  CHECK(config.navi_planner_config()
+            .navi_speed_decider_config()
+            .has_hard_accel_limit());
 
+  max_speed_ = FLAGS_planning_upper_speed_limit;
   preferred_accel_ = std::abs(config.navi_planner_config()
                                   .navi_speed_decider_config()
                                   .preferred_accel());
@@ -90,6 +98,12 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   safe_distance_ratio_ = std::abs(config.navi_planner_config()
                                       .navi_speed_decider_config()
                                       .safe_distance_ratio());
+  hard_speed_limit_ = std::abs(config.navi_planner_config()
+                                   .navi_speed_decider_config()
+                                   .hard_speed_limit());
+  hard_accel_limit_ = std::abs(config.navi_planner_config()
+                                   .navi_speed_decider_config()
+                                   .hard_accel_limit());
 
   return true;
 }
@@ -115,11 +129,11 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   auto start_a = planning_start_point.has_a() ? planning_start_point.a() : 0.0;
   auto start_da = 0.0;
 
-  auto ret =
-      MakeSpeedDecision(start_v, start_a, start_da, kTsGraphSMax,
-                        path_data_points, frame_->obstacles(),
-                        [&](const std::string& id) { return frame_->Find(id); },
-                        reference_line_info_->mutable_speed_data());
+  auto ret = MakeSpeedDecision(
+      start_v, start_a, start_da, kTsGraphSMax, path_data_points,
+      frame_->obstacles(),
+      [&](const std::string& id) { return frame_->Find(id); },
+      kSpeedPointNumLimit, reference_line_info_->mutable_speed_data());
   RecordDebugInfo(reference_line_info->speed_data());
   if (ret != Status::OK()) {
     reference_line_info->SetDrivable(false);
@@ -134,7 +148,7 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     const std::vector<PathPoint>& path_data_points,
     const std::vector<const Obstacle*>& obstacles,
     const std::function<const Obstacle*(const std::string&)>& find_obstacle,
-    SpeedData* const speed_data) {
+    size_t speed_point_num_limit, SpeedData* const speed_data) {
   CHECK_NOTNULL(speed_data);
 
   // init t-s graph
@@ -176,10 +190,28 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     return ret;
   }
 
+  ts_points.resize(std::min(speed_point_num_limit, ts_points.size()));
+
   speed_data->Clear();
-  for (const auto& ts_point : ts_points)
-    speed_data->AppendSpeedPoint(ts_point.s, ts_point.t, ts_point.v, ts_point.a,
-                                 ts_point.da);
+  for (auto& ts_point : ts_points) {
+    if (ts_point.v > hard_speed_limit_) {
+      AERROR << "The v " << ts_point.v << " of point with s " << ts_point.s
+             << " and t " << ts_point.t << "is greater than hard_speed_limit "
+             << hard_speed_limit_;
+      ts_point.v = hard_speed_limit_;
+    }
+
+    if (ts_point.a > hard_accel_limit_) {
+      AERROR << "The a " << ts_point.a << " of point with s " << ts_point.s
+             << " and t " << ts_point.t << "is greater than hard_accel_limit "
+             << hard_accel_limit_;
+      ts_point.a = hard_accel_limit_;
+    }
+    auto bs =
+        reference_line_info_->path_data().discretized_path().StartPoint().s();
+    speed_data->AppendSpeedPoint(ts_point.s + bs, ts_point.t, ts_point.v,
+                                 ts_point.a, ts_point.da);
+  }
 
   return Status::OK();
 }

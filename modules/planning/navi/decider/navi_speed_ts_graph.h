@@ -91,18 +91,6 @@ class NaviSpeedTsGraph {
              const std::function<double(double v)>& get_safe_distance);
 
   /**
-   * @brief Get the current s-step.
-   * @return Current s-step.
-   */
-  double Step() const;
-
-  /**
-   * @brief Get the current num of s-points.
-   * @return Current num of s-points.
-   */
-  std::size_t PointNum() const;
-
-  /**
    * @brief Assign constraints to all points.
    * @param constraints constraints for all points.
    */
