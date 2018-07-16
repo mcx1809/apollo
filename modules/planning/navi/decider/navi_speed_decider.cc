@@ -229,8 +229,9 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
   auto front_edge_to_center =
       vehicle_config.vehicle_param().front_edge_to_center();
 
-  obstacle_decider_.GetUnsafeObstaclesID(path_data_points, obstacles);
-  for (const auto& id : obstacle_decider_.UnsafeObstacles()) {
+  obstacle_decider_.GetUnsafeObstaclesInfo(path_data_points, obstacles);
+  for (const auto& iter : obstacle_decider_.UnsafeObstacles()) {
+    std::string id = std::get<0>(iter);
     const auto* obstacle = find_obstacle(id);
     if (obstacle != nullptr) {
       // TODO(all): path data need to be considered

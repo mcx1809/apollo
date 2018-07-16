@@ -330,7 +330,7 @@ double NaviPathDecider::NudgeProcess(
   NaviObstacleDecider obstacle_decider;
   int lane_obstacles_num = 0;
   double nudge_distance = obstacle_decider.GetNudgeDistance(
-      obstacles, path_decision, path_data_points, min_lane_width,
+      obstacles, reference_line, path_decision, path_data_points,
       &lane_obstacles_num);
   // adjust plan start point
   if (std::fabs(nudge_distance) > KNudgeEpsilon) {

@@ -179,6 +179,8 @@ DEFINE_bool(enable_nudge_decision, true, "enable nudge decision");
 DEFINE_bool(enable_nudge_slowdown, true,
             "True to slow down when nudge obstacles.");
 
+DEFINE_bool(noenable_side_radar, true,
+            "If there is no radar on the side,ignore it");
 DEFINE_double(static_decision_nudge_l_buffer, 0.5, "l buffer for nudge");
 DEFINE_double(lateral_ignore_buffer, 3.0,
               "If an obstacle's lateral distance is further away than this "
@@ -306,11 +308,10 @@ DEFINE_double(lon_collision_buffer, 1.0,
 DEFINE_double(lat_collision_buffer, 0.2,
               "The lateral buffer to keep distance to other vehicles");
 DEFINE_uint32(num_sample_follow_per_timestamp, 3,
-             "The number of sample points for each timestamp to follow");
+              "The number of sample points for each timestamp to follow");
 
 // Lattice Evaluate Parameters
-DEFINE_double(weight_lon_objective, 10.0,
-              "Weight of longitudinal travel cost");
+DEFINE_double(weight_lon_objective, 10.0, "Weight of longitudinal travel cost");
 DEFINE_double(weight_lon_jerk, 1.0, "Weight of longitudinal jerk cost");
 DEFINE_double(weight_lon_collision, 2.0,
               "Weight of logitudinal collision cost");
