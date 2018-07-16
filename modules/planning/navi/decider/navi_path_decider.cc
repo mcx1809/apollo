@@ -231,14 +231,17 @@ double NaviPathDecider::SmoothInitY(const double actual_ref_init_y,
   double shift_direction =
       target_path_init_y < 0.0 ? -kPositiveSign : kPositiveSign;
 
-  // need to adjust in lateral
   double plan_point_to_target_distance = std::fabs(target_path_init_y);
+  // need to adjust in lateral
   if (plan_point_to_target_distance > min_init_y) {
     shift_distance = (plan_point_to_target_distance < max_init_y)
                          ? plan_point_to_target_distance
                          : max_init_y;
+
+    // accurate to the centimeter scale
+    start_position_y =
+        shift_direction * std::floor(shift_distance * 100.0) * 0.01;
   }
-  start_position_y = shift_direction * shift_distance;
 
   return start_position_y;
 }
@@ -308,27 +311,10 @@ double NaviPathDecider::NudgeProcess(
     return nudge_position_y;
   }
 
-  // get the min lane width from
-  double min_lane_width = std::numeric_limits<double>::max();
-  constexpr double KNudgeEpsilon = 1e-6;
-  std::for_each(path_data_points.begin(), path_data_points.end(),
-                [&min_lane_width,
-                 reference_line](const apollo::common::PathPoint& path_point) {
-                  double lane_left_width = 0.0;
-                  double lane_right_width = 0.0;
-                  bool bRet = reference_line.GetLaneWidth(
-                      path_point.s(), &lane_left_width, &lane_right_width);
-                  if (bRet) {
-                    double lane_width = lane_left_width + lane_right_width;
-                    if (lane_width < min_lane_width) {
-                      min_lane_width = lane_width;
-                    }
-                  }
-                });
-
   // get nudge latteral position
   NaviObstacleDecider obstacle_decider;
   int lane_obstacles_num = 0;
+  constexpr double KNudgeEpsilon = 1e-6;
   double nudge_distance = obstacle_decider.GetNudgeDistance(
       obstacles, reference_line, path_decision, path_data_points,
       &lane_obstacles_num);
