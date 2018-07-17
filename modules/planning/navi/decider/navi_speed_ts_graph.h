@@ -22,7 +22,6 @@
 #ifndef MODULES_PLANNING_NAVI_NAVI_SPEED_TS_GRAPH_H_
 #define MODULES_PLANNING_NAVI_NAVI_SPEED_TS_GRAPH_H_
 
-#include <functional>
 #include <limits>
 #include <vector>
 
@@ -85,10 +84,12 @@ class NaviSpeedTsGraph {
    * @brief Reset points's num and time step etc.
    * @param s_step S step between two points.
    * @param s_max Max of s-axis.
-   * @param get_safe_distance Callback for get safe distance base on v.
+   * @param start_v V of the start point.
+   * @param start_a A of the start point.
+   * @param start_da Da of the start point.
    */
-  void Reset(double s_step, double s_max,
-             const std::function<double(double v)>& get_safe_distance);
+  void Reset(double s_step, double s_max, double start_v, double start_a,
+             double start_da);
 
   /**
    * @brief Assign constraints to all points.
@@ -107,26 +108,30 @@ class NaviSpeedTsGraph {
   /**
    * @brief Assign constraints for an obstacle.
    * @param distance The distance from vehicle to the obstacle.
+   * @param safe_distance The safe distance from vehicle to the obstacle.
+   * @param following_accel_ratio Decide the level of acceleration when
+   * following obstacle.
    * @param v Speed of the obstacle.
+   * @param cruise_speed Cruise speed of vehicle.
    * @param constraints constraints for the point.
    */
-  void UpdateObstacleConstraints(double distance, double v);
+  void UpdateObstacleConstraints(double distance, double safe_distance,
+                                 double following_accel_ratio, double v,
+                                 double cruise_speed);
 
   /**
    * @brief Solving the t-s curve.
-   * @param start_v V of the start point.
-   * @param start_a A of the start point.
-   * @param start_da Da of the start point.
    * @param points buffer of t-s points for output.
    * @return Status::OK() if success; error otherwise.
    */
-  apollo::common::Status Solve(double start_v, double start_a, double start_da,
-                               std::vector<NaviSpeedTsPoint>* points);
+  apollo::common::Status Solve(std::vector<NaviSpeedTsPoint>* points);
 
  private:
   std::vector<NaviSpeedTsConstraints> constraints_;
   double s_step_;
-  std::function<double(double)> get_safe_distance_;
+  double start_v_;
+  double start_a_;
+  double start_da_;
 };
 
 }  // namespace planning
