@@ -100,6 +100,7 @@ apollo::common::Status NaviPathDecider::Process(
   }
 
   // get y-coordinate of the target start path plan point
+  common::math::Vec2d adc_vec2d_point(vehicle_state_.x(), vehicle_state_.y());
   PlanningTarget planning_target = reference_line_info_->planning_target();
   double target_start_path_point_y = init_basic_path_y;
   if (reference_line_info_->IsChangeLanePath() &&
@@ -116,7 +117,7 @@ apollo::common::Status NaviPathDecider::Process(
     double lane_left_width = 0.0;
     double lane_right_width = 0.0;
     constexpr double KSideBuffer = 0.30;
-
+    ADEBUG << "Pull Over lane path plan";
     bool bRet = reference_line.GetLaneWidth(start_point_s, &lane_left_width,
                                             &lane_right_width);
     if (bRet) {
@@ -127,8 +128,8 @@ apollo::common::Status NaviPathDecider::Process(
       return Status(apollo::common::ErrorCode::PLANNING_ERROR,
                     "NaviPathDecider can not pull over");
     }
-  } else {
-    ADEBUG << "common lane path plan";
+  } else if (reference_line.IsOnRoad(adc_vec2d_point)) {
+    ADEBUG << "Common lane path plan";
     target_start_path_point_y =
         NudgeProcess(reference_line, path_points, obstacles, *path_decision);
   }
@@ -147,7 +148,10 @@ apollo::common::Status NaviPathDecider::Process(
   ShiftY(shift_distance_y, &path_points);
 
   // calculate the value of the path trajectory later
-  reference_line_info_->AddCost(0.0);
+  constexpr double KDefaultDoubleLaneWidth = 7.5;
+  double path_l_cost = std::fabs(init_basic_path_y) / KDefaultDoubleLaneWidth *
+                       config_.path_l_cost();
+  reference_line_info_->AddCost(path_l_cost);
 
   DiscretizedPath discretized_path(path_points);
   path_data->SetReferenceLine(&(reference_line_info_->reference_line()));
@@ -198,6 +202,7 @@ bool NaviPathDecider::GetBasicPathData(
   const double reference_line_len = reference_line.Length();
 
   // get basic path points form reference_line
+  ADEBUG << "basic path data len ; " << reference_line_len;
   for (double s = start_plan_point_project_s; s < reference_line_len;
        s += unit_s) {
     const auto& ref_point = reference_line.GetReferencePoint(s);

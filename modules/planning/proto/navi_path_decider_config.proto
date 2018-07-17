@@ -9,4 +9,5 @@ message NaviPathDeciderConfig {
   optional double max_smooth_init_y = 4 [default = 0.4];
   optional double lateral_shift_delta = 5 [default = 0.05];
   optional double max_lateral_distance = 6 [default = 6.0];
+  optional double path_l_cost = 7 [default = 6.5];
 }

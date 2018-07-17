@@ -191,6 +191,7 @@ navi_planner_config {
         max_smooth_init_y: 0.4
         lateral_shift_delta: 0.1
         max_lateral_distance: 6.0
+        path_l_cost: 6.5
     }
 
     navi_speed_decider_config {
