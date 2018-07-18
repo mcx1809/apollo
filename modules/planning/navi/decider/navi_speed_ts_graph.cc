@@ -108,6 +108,18 @@ void NaviSpeedTsGraph::UpdatePointConstraints(
     CombineConstraints(constraints, &constraints_[idx]);
 }
 
+void NaviSpeedTsGraph::UpdateRangeConstraints(
+    double start_s, double end_s, const NaviSpeedTsConstraints& constraints) {
+  CHECK_GE(start_s, 0.0);
+  CHECK_GE(end_s, start_s);
+  CheckConstraints(constraints);
+
+  auto start_idx = (std::size_t)(start_s / s_step_);
+  auto end_idx = (std::size_t)(end_s / s_step_);
+  for (size_t i = start_idx; i < end_idx && i < constraints_.size(); i++)
+    CombineConstraints(constraints, &constraints_[i]);
+}
+
 void NaviSpeedTsGraph::UpdateObstacleConstraints(double distance,
                                                  double safe_distance,
                                                  double following_accel_ratio,

@@ -138,6 +138,7 @@ class NaviSpeedDecider : public Task {
   double safe_distance_base_;
   double safe_distance_ratio_;
   double following_accel_ratio_;
+  double curve_speed_limit_ratio_;
   double hard_speed_limit_;
   double hard_accel_limit_;
 

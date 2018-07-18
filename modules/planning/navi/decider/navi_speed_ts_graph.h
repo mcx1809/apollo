@@ -106,6 +106,15 @@ class NaviSpeedTsGraph {
                               const NaviSpeedTsConstraints& constraints);
 
   /**
+   * @brief Assign constraints to a range.
+   * @param start_s S fo the start point.
+   * @param end_s S fo the end point.
+   * @param constraints constraints for points.
+   */
+  void UpdateRangeConstraints(double start_s, double end_s,
+                              const NaviSpeedTsConstraints& constraints);
+
+  /**
    * @brief Assign constraints for an obstacle.
    * @param distance The distance from vehicle to the obstacle.
    * @param safe_distance The safe distance from vehicle to the obstacle.

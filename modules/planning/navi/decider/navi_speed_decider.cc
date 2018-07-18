@@ -74,6 +74,9 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
             .has_following_accel_ratio());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
+            .has_curve_speed_limit_ratio());
+  CHECK(config.navi_planner_config()
+            .navi_speed_decider_config()
             .has_hard_speed_limit());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
@@ -105,6 +108,9 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   following_accel_ratio_ = std::abs(config.navi_planner_config()
                                         .navi_speed_decider_config()
                                         .following_accel_ratio());
+  curve_speed_limit_ratio_ = std::abs(config.navi_planner_config()
+                                          .navi_speed_decider_config()
+                                          .curve_speed_limit_ratio());
   hard_speed_limit_ = std::abs(config.navi_planner_config()
                                    .navi_speed_decider_config()
                                    .hard_speed_limit());
@@ -134,7 +140,7 @@ Status NaviSpeedDecider::Execute(Frame* frame,
                      ? discretized_path.StartPoint().s()
                      : 0.0;
   auto end_s = discretized_path.EndPoint().has_s()
-                   ? discretized_path.StartPoint().s()
+                   ? discretized_path.EndPoint().s()
                    : kTsGraphSMax;
   // TODO(all): is true?
   auto start_v = planning_start_point.has_v() ? planning_start_point.v() : 0.0;
