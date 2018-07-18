@@ -40,6 +40,7 @@ using apollo::common::util::MakePathPoint;
 namespace {
 constexpr double kTsGraphSStep = 0.4;
 constexpr double kTsGraphSMax = 100.0;
+constexpr size_t kFallbackSpeedPointNum = 4;
 constexpr size_t kSpeedPointNumLimit = 100;
 }  // namespace
 
@@ -164,8 +165,12 @@ Status NaviSpeedDecider::MakeSpeedDecision(
   CHECK_NOTNULL(speed_data);
 
   // init t-s graph
-  ts_graph_.Reset(kTsGraphSStep, planning_length, std::max(start_v, 0.0),
-                  start_a, start_da);
+  if (planning_length > kTsGraphSStep)
+    ts_graph_.Reset(kTsGraphSStep, planning_length, std::max(start_v, 0.0),
+                    start_a, start_da);
+  else
+    ts_graph_.Reset(planning_length / kFallbackSpeedPointNum, planning_length,
+                    std::max(start_v, 0.0), start_a, start_da);
 
   // add t-s constraints
   auto ret = AddPerceptionRangeConstraints();

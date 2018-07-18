@@ -104,7 +104,8 @@ void NaviSpeedTsGraph::UpdatePointConstraints(
   CheckConstraints(constraints);
 
   auto idx = (std::size_t)(s / s_step_);
-  CombineConstraints(constraints, &constraints_[idx]);
+  if (idx < constraints_.size())
+    CombineConstraints(constraints, &constraints_[idx]);
 }
 
 void NaviSpeedTsGraph::UpdateObstacleConstraints(double distance,
@@ -335,8 +336,6 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
 
     if (std::abs(point.t - kInfinityValue) < kDoubleEpsilon)
       output->resize(i + 1);
-  }
-  for (auto& point : *output) {
   }
 
   return Status::OK();
