@@ -507,10 +507,14 @@ bool ReferenceLineProvider::GetNearestWayPointFromNavigationPath(
     double s = 0.0;
     double l = 0.0;
     if (!lane->GetProjection({point.x(), point.y()}, &s, &l)) {
+      AERROR << "get adc projection point on lane failed";
       continue;
     }
     constexpr double kEpsilon = 1e-6;
-    if (s > (lane->total_length() + kEpsilon) || (s + kEpsilon) < 0.0) {
+    if (s > (lane->total_length() + kEpsilon)) {
+      AERROR << "the s of the projection point of the adc on the lane exceeds "
+                "the maximum length of the lane: s : "
+             << s << " lane total length : " << lane->total_length();
       continue;
     }
 

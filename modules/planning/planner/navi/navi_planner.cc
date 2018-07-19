@@ -391,7 +391,7 @@ void NaviPlanner::GenerateFallbackPathProfile(
   std::vector<common::PathPoint> path_points;
   for (double s = adc_s; s < max_s; s += unit_s) {
     const auto& ref_point =
-        reference_line_info->reference_line().GetReferencePoint(adc_s);
+        reference_line_info->reference_line().GetReferencePoint(s);
     common::PathPoint path_point = common::util::MakePathPoint(
         ref_point.x() + dx, ref_point.y() + dy, 0.0, ref_point.heading(),
         ref_point.kappa(), ref_point.dkappa(), 0.0);
