@@ -50,6 +50,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedData) {
   speed_decider.safe_distance_base_ = 2.0;
   speed_decider.safe_distance_ratio_ = 1.0;
   speed_decider.following_accel_ratio_ = 0.5;
+  speed_decider.curve_speed_limit_ratio_ = 0.05;
   speed_decider.hard_speed_limit_ = 100.0;
   speed_decider.hard_accel_limit_ = 10.0;
 
@@ -89,6 +90,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
   speed_decider.safe_distance_base_ = 2.0;
   speed_decider.safe_distance_ratio_ = 1.0;
   speed_decider.following_accel_ratio_ = 0.5;
+  speed_decider.curve_speed_limit_ratio_ = 0.55;
   speed_decider.hard_speed_limit_ = 100.0;
   speed_decider.hard_accel_limit_ = 10.0;
 
@@ -137,6 +139,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
   speed_decider.safe_distance_base_ = 2.0;
   speed_decider.safe_distance_ratio_ = 1.0;
   speed_decider.following_accel_ratio_ = 0.5;
+  speed_decider.curve_speed_limit_ratio_ = 0.05;
   speed_decider.hard_speed_limit_ = 100.0;
   speed_decider.hard_accel_limit_ = 10.0;
 
@@ -183,6 +186,50 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
     if (p.s() > 20.0 && p.s() < 30.0) EXPECT_NEAR(5.0, p.v(), 0.5);
     if (p.s() > 43) EXPECT_NEAR(0.0, p.v(), 1.0);
   }
+}
+
+TEST(NaviSpeedDeciderTest, CreateSpeedDataForCurve) {
+  NaviSpeedDecider speed_decider;
+  speed_decider.preferred_speed_ = 10.0;
+  speed_decider.max_speed_ = 20.0;
+  speed_decider.preferred_accel_ = 1.0;
+  speed_decider.preferred_decel_ = 1.0;
+  speed_decider.max_accel_ = 5.0;
+  speed_decider.max_decel_ = 5.0;
+  speed_decider.obstacle_buffer_ = 1.0;
+  speed_decider.safe_distance_base_ = 2.0;
+  speed_decider.safe_distance_ratio_ = 1.0;
+  speed_decider.following_accel_ratio_ = 0.5;
+  speed_decider.curve_speed_limit_ratio_ = 0.05;
+  speed_decider.hard_speed_limit_ = 100.0;
+  speed_decider.hard_accel_limit_ = 10.0;
+
+  PerceptionObstacle perception_obstacle;
+  std::map<std::string, Obstacle> obstacle_buf;
+  std::vector<const Obstacle*> obstacles;
+
+  std::vector<PathPoint> path_data_points;
+  auto make_path_point = [](double s, double kappa) {
+    auto path_point = MakePathPoint(s, 0.0, 0.0, 0.0, kappa, 0.0, 0.0);
+    path_point.set_s(s);
+    return path_point;
+  };
+  path_data_points.emplace_back(make_path_point(0.0, 0.0));
+  path_data_points.emplace_back(make_path_point(20.0, 0.0));
+  for (size_t i = 1; i <= 10; i++)
+    path_data_points.emplace_back(make_path_point(20.0 + i, 0.15));
+  path_data_points.emplace_back(make_path_point(31.0, 0.0));
+  path_data_points.emplace_back(make_path_point(50.0, 0.0));
+
+  SpeedData speed_data;
+  EXPECT_EQ(
+      Status::OK(),
+      speed_decider.MakeSpeedDecision(
+          0.0, 10.0, 0.0, 0.0, 100.0, path_data_points, obstacles,
+          [&](const std::string& id) mutable { return &obstacle_buf[id]; },
+          1000, &speed_data));
+  for (auto& p : speed_data.speed_vector())
+    if (p.s() > 20.0 && p.s() < 30.0) EXPECT_NEAR(2.0, p.v(), 0.5);
 }
 
 TEST(NaviSpeedDeciderTest, ErrorTest) {}

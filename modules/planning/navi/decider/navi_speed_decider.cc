@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "glog/logging.h"
 
@@ -32,6 +33,7 @@
 namespace apollo {
 namespace planning {
 
+using apollo::common::ErrorCode;
 using apollo::common::PathPoint;
 using apollo::common::Status;
 using apollo::common::VehicleConfigHelper;
@@ -135,16 +137,22 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   auto& discretized_path = reference_line_info_->path_data().discretized_path();
   const auto& path_data_points = discretized_path.path_points();
 
-  const auto& planning_start_point = frame_->PlanningStartPoint();
   auto start_s = discretized_path.StartPoint().has_s()
                      ? discretized_path.StartPoint().s()
                      : 0.0;
   auto end_s = discretized_path.EndPoint().has_s()
                    ? discretized_path.EndPoint().s()
                    : kTsGraphSMax;
+
   // TODO(all): is true?
-  auto start_v = planning_start_point.has_v() ? planning_start_point.v() : 0.0;
-  auto start_a = planning_start_point.has_a() ? planning_start_point.a() : 0.0;
+  const auto& vehicle_state = frame_->vehicle_state();
+  auto start_v = vehicle_state.has_linear_velocity()
+                     ? vehicle_state.linear_velocity()
+                     : 0.0;
+  start_v = std::max(0.0, start_v);
+  auto start_a = vehicle_state.has_linear_acceleration()
+                     ? vehicle_state.linear_acceleration()
+                     : 0.0;
   auto start_da = 0.0;
 
   auto ret = MakeSpeedDecision(
@@ -192,7 +200,7 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     return ret;
   }
 
-  ret = AddCurveSpeedConstraints();
+  ret = AddCurveSpeedConstraints(path_data_points);
   if (ret != Status::OK()) {
     AERROR << "Add t-s constraints base on curve failed";
     return ret;
@@ -208,7 +216,7 @@ Status NaviSpeedDecider::MakeSpeedDecision(
   std::vector<NaviSpeedTsPoint> ts_points;
   ret = ts_graph_.Solve(&ts_points);
   if (ret != Status::OK()) {
-    AERROR << "Add t-s constraints base on configs failed";
+    AERROR << "Solve speed points failed";
     return ret;
   }
 
@@ -239,7 +247,6 @@ Status NaviSpeedDecider::MakeSpeedDecision(
 
 Status NaviSpeedDecider::AddPerceptionRangeConstraints() {
   // TODO(all):
-
   return Status::OK();
 }
 
@@ -286,8 +293,36 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
   return Status::OK();
 }
 
-Status NaviSpeedDecider::AddCurveSpeedConstraints() {
-  // TODO(all):
+Status NaviSpeedDecider::AddCurveSpeedConstraints(
+    const std::vector<PathPoint>& path_data_points) {
+  if (path_data_points.size() < 2) {
+    AERROR << "Too few path points";
+    return Status(ErrorCode::PLANNING_ERROR, "too few path points.");
+  }
+
+  const auto bs = path_data_points[0].s();
+  for (size_t i = 1; i < path_data_points.size(); i++) {
+    const auto& prev = path_data_points[i - 1];
+    const auto& cur = path_data_points[i];
+    auto start_s = prev.has_s() ? prev.s() - bs : 0.0;
+    start_s = std::max(0.0, start_s);
+    auto end_s = cur.has_s() ? cur.s() - bs : 0.0;
+    end_s = std::max(0.0, end_s);
+    auto start_k = prev.has_kappa() ? std::abs(prev.kappa()) : 0.0;
+    auto end_k = cur.has_kappa() ? std::abs(cur.kappa()) : 0.0;
+    auto kappa = (start_k + end_k) / 2.0;
+    auto v_max = std::min(curve_speed_limit_ratio_ / (kappa * kappa),
+                          std::numeric_limits<double>::max());
+
+    //
+    std::cout << "----- start_s:" << start_s << "\tend_s:" << end_s
+              << "\tkappa:" << kappa << "\tv_max" << v_max << std::endl;
+    NaviSpeedTsConstraints constraints;
+    constraints.v_max = v_max;
+    constraints.v_preffered = v_max;
+    ts_graph_.UpdateRangeConstraints(start_s, end_s, constraints);
+  }
+
   return Status::OK();
 }
 

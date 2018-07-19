@@ -115,9 +115,11 @@ class NaviSpeedDecider : public Task {
 
   /**
    * @brief Add t-s constraints base on curve.
+   * @param path_data_points Current path data.
    * @return Status::OK() if success; error otherwise.
    */
-  apollo::common::Status AddCurveSpeedConstraints();
+  apollo::common::Status AddCurveSpeedConstraints(
+      const std::vector<common::PathPoint>& path_data_points);
 
   /**
    * @brief Add t-s constraints base on configs, which has max-speed etc.
@@ -148,6 +150,7 @@ class NaviSpeedDecider : public Task {
   FRIEND_TEST(NaviSpeedDeciderTest, CreateSpeedData);
   FRIEND_TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle);
   FRIEND_TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles);
+  FRIEND_TEST(NaviSpeedDeciderTest, CreateSpeedDataForCurve);
 };
 
 }  // namespace planning
