@@ -64,6 +64,9 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
       config.navi_planner_config().navi_speed_decider_config().has_max_decel());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
+            .has_preferred_jerk());
+  CHECK(config.navi_planner_config()
+            .navi_speed_decider_config()
             .has_obstacle_buffer());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
@@ -76,7 +79,7 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
             .has_following_accel_ratio());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
-            .has_curve_speed_limit_ratio());
+            .has_centric_accel_limit());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
             .has_hard_speed_limit());
@@ -91,6 +94,9 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   preferred_decel_ = std::abs(config.navi_planner_config()
                                   .navi_speed_decider_config()
                                   .preferred_decel());
+  preferred_jerk_ = std::abs(config.navi_planner_config()
+                                 .navi_speed_decider_config()
+                                 .preferred_jerk());
   max_accel_ = std::abs(
       config.navi_planner_config().navi_speed_decider_config().max_accel());
   max_decel_ = std::abs(
@@ -110,9 +116,9 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   following_accel_ratio_ = std::abs(config.navi_planner_config()
                                         .navi_speed_decider_config()
                                         .following_accel_ratio());
-  curve_speed_limit_ratio_ = std::abs(config.navi_planner_config()
-                                          .navi_speed_decider_config()
-                                          .curve_speed_limit_ratio());
+  centric_accel_limit_ = std::abs(config.navi_planner_config()
+                                      .navi_speed_decider_config()
+                                      .centric_accel_limit());
   hard_speed_limit_ = std::abs(config.navi_planner_config()
                                    .navi_speed_decider_config()
                                    .hard_speed_limit());
@@ -135,7 +141,7 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   preferred_speed_ = std::min(max_speed_, preferred_speed_);
 
   auto& discretized_path = reference_line_info_->path_data().discretized_path();
-  const auto& path_data_points = discretized_path.path_points();
+  const auto& path_points = discretized_path.path_points();
 
   auto start_s = discretized_path.StartPoint().has_s()
                      ? discretized_path.StartPoint().s()
@@ -157,8 +163,7 @@ Status NaviSpeedDecider::Execute(Frame* frame,
 
   auto ret = MakeSpeedDecision(
       start_s, start_v, start_a, start_da,
-      std::min(kTsGraphSMax, end_s - start_s), path_data_points,
-      frame_->obstacles(),
+      std::min(kTsGraphSMax, end_s - start_s), path_points, frame_->obstacles(),
       [&](const std::string& id) { return frame_->Find(id); },
       kSpeedPointNumLimit, reference_line_info_->mutable_speed_data());
   RecordDebugInfo(reference_line_info->speed_data());
@@ -172,7 +177,7 @@ Status NaviSpeedDecider::Execute(Frame* frame,
 
 Status NaviSpeedDecider::MakeSpeedDecision(
     double start_s, double start_v, double start_a, double start_da,
-    double planning_length, const std::vector<PathPoint>& path_data_points,
+    double planning_length, const std::vector<PathPoint>& path_points,
     const std::vector<const Obstacle*>& obstacles,
     const std::function<const Obstacle*(const std::string&)>& find_obstacle,
     size_t speed_point_num_limit, SpeedData* const speed_data) {
@@ -193,16 +198,16 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     return ret;
   }
 
-  ret = AddObstaclesConstraints(start_v, planning_length, path_data_points,
+  ret = AddObstaclesConstraints(start_v, planning_length, path_points,
                                 obstacles, find_obstacle);
   if (ret != Status::OK()) {
     AERROR << "Add t-s constraints base on obstacles failed";
     return ret;
   }
 
-  ret = AddCurveSpeedConstraints(path_data_points);
+  ret = AddCentricAccelerationConstraints(path_points);
   if (ret != Status::OK()) {
-    AERROR << "Add t-s constraints base on curve failed";
+    AERROR << "Add t-s constraints base on centric acceleration failed";
     return ret;
   }
 
@@ -219,6 +224,10 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     AERROR << "Solve speed points failed";
     return ret;
   }
+
+  // TODO(all): because it is not start from planning_start_point, start_a may
+  // always be zero
+  if (ts_points.size() > 2) ts_points[0].a = ts_points[1].a;
 
   ts_points.resize(std::min(speed_point_num_limit, ts_points.size()));
 
@@ -252,7 +261,7 @@ Status NaviSpeedDecider::AddPerceptionRangeConstraints() {
 
 Status NaviSpeedDecider::AddObstaclesConstraints(
     double vehicle_speed, double path_length,
-    const std::vector<PathPoint>& path_data_points,
+    const std::vector<PathPoint>& path_points,
     const std::vector<const Obstacle*>& obstacles,
     const std::function<const Obstacle*(const std::string&)>& find_obstacle) {
   const auto& vehicle_config = VehicleConfigHelper::instance()->GetConfig();
@@ -266,7 +275,7 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
   };
 
   // add obstacles from perception
-  obstacle_decider_.GetUnsafeObstaclesInfo(path_data_points, obstacles);
+  obstacle_decider_.GetUnsafeObstaclesInfo(path_points, obstacles);
   for (const auto& info : obstacle_decider_.UnsafeObstacles()) {
     const auto& id = std::get<0>(info);
     const auto* obstacle = find_obstacle(id);
@@ -288,35 +297,35 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
                                       following_accel_ratio_, 0.0,
                                       preferred_speed_);
 
-  // TODO(all): stop decision
-
   return Status::OK();
 }
 
-Status NaviSpeedDecider::AddCurveSpeedConstraints(
-    const std::vector<PathPoint>& path_data_points) {
-  if (path_data_points.size() < 2) {
+Status AddTrafficDecisionConstraints() {
+  // TODO(all):
+  return Status::OK();
+}
+
+Status NaviSpeedDecider::AddCentricAccelerationConstraints(
+    const std::vector<PathPoint>& path_points) {
+  if (path_points.size() < 2) {
     AERROR << "Too few path points";
     return Status(ErrorCode::PLANNING_ERROR, "too few path points.");
   }
 
-  const auto bs = path_data_points[0].s();
-  for (size_t i = 1; i < path_data_points.size(); i++) {
-    const auto& prev = path_data_points[i - 1];
-    const auto& cur = path_data_points[i];
+  const auto bs = path_points[0].s();
+  for (size_t i = 1; i < path_points.size(); i++) {
+    const auto& prev = path_points[i - 1];
+    const auto& cur = path_points[i];
     auto start_s = prev.has_s() ? prev.s() - bs : 0.0;
     start_s = std::max(0.0, start_s);
     auto end_s = cur.has_s() ? cur.s() - bs : 0.0;
     end_s = std::max(0.0, end_s);
-    auto start_k = prev.has_kappa() ? std::abs(prev.kappa()) : 0.0;
-    auto end_k = cur.has_kappa() ? std::abs(cur.kappa()) : 0.0;
-    auto kappa = (start_k + end_k) / 2.0;
-    auto v_max = std::min(curve_speed_limit_ratio_ / (kappa * kappa),
+    auto start_k = prev.has_kappa() ? prev.kappa() : 0.0;
+    auto end_k = cur.has_kappa() ? cur.kappa() : 0.0;
+    auto kappa = std::abs((start_k + end_k) / 2.0);
+    auto v_max = std::min(std::sqrt(centric_accel_limit_ / kappa),
                           std::numeric_limits<double>::max());
 
-    //
-    std::cout << "----- start_s:" << start_s << "\tend_s:" << end_s
-              << "\tkappa:" << kappa << "\tv_max" << v_max << std::endl;
     NaviSpeedTsConstraints constraints;
     constraints.v_max = v_max;
     constraints.v_preffered = v_max;
@@ -334,6 +343,7 @@ Status NaviSpeedDecider::AddConfiguredConstraints() {
   constraints.a_preffered = preferred_accel_;
   constraints.b_max = max_decel_;
   constraints.b_preffered = preferred_decel_;
+  constraints.da_preffered = preferred_jerk_;
   ts_graph_.UpdateConstraints(constraints);
 
   return Status::OK();

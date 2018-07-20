@@ -39,17 +39,17 @@ namespace planning {
  * @brief NaviSpeedTsConstraints is used to describe constraints of a t-s point.
  */
 struct NaviSpeedTsConstraints {
-  // The minimum timestamp of the point, can't less than it.
+  // The minimum timestamp of the point.
   double t_min = 0.0;
-  // The maximum speed of the point, can't lgreater than it.
+  // The maximum speed of the point.
   double v_max = std::numeric_limits<double>::max();
   // The preffered speed of the point.
   double v_preffered = std::numeric_limits<double>::max();
-  // The maximum acceleration of the point, can't lgreater than it.
+  // The maximum acceleration of the point.
   double a_max = std::numeric_limits<double>::max();
   // The preffered acceleration of the point.
   double a_preffered = std::numeric_limits<double>::max();
-  // The maximum deceleration of the point, can't lgreater than it.
+  // The maximum deceleration of the point.
   double b_max = std::numeric_limits<double>::max();
   // The preffered deceleration of the point.
   double b_preffered = std::numeric_limits<double>::max();
@@ -96,14 +96,6 @@ class NaviSpeedTsGraph {
    * @param constraints constraints for all points.
    */
   void UpdateConstraints(const NaviSpeedTsConstraints& constraints);
-
-  /**
-   * @brief Assign constraints to one point.
-   * @param s S fo the point.
-   * @param constraints constraints for the point.
-   */
-  void UpdatePointConstraints(double s,
-                              const NaviSpeedTsConstraints& constraints);
 
   /**
    * @brief Assign constraints to a range.
