@@ -169,7 +169,8 @@ apollo::common::Status NaviPathDecider::Process(
   ADEBUG << "in current plan, adc latteral to ref line shift distance : "
          << start_point_y << " delta_theta : " << delta_theta
          << " ref line latteral to adc shift distance : " << shift_distance_y
-         << " path point size : " << path_points.size();
+         << " path point size : " << path_points.size()
+         << " theta_change_ratio : " << theta_change_ratio_;
   ShiftY(shift_distance_y, &path_points);
 
   // adjust start path point theta
