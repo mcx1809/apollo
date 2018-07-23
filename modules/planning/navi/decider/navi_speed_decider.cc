@@ -183,6 +183,8 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     size_t speed_point_num_limit, SpeedData* const speed_data) {
   CHECK_NOTNULL(speed_data);
 
+  // TODO(all): if start_v > max speed
+
   // init t-s graph
   if (planning_length > kTsGraphSStep)
     ts_graph_.Reset(kTsGraphSStep, planning_length, std::max(start_v, 0.0),

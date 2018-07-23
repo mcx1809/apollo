@@ -45,6 +45,7 @@ constexpr double kDefaultSafeDistanceBase = 2.0;
 constexpr double kSafeDistanceSmooth = 2.0;
 constexpr double kFollowSpeedSmooth = 0.25;
 constexpr double kInfinityValue = 1.0e8;
+constexpr double kTimeDeviation = 1.0e-3;
 }  // namespace
 
 static void CheckConstraints(const NaviSpeedTsConstraints& constraints) {
@@ -203,6 +204,18 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
   constraints.da_max = start_da_;
   constraints.da_preffered = start_da_;
 
+  // preprocess v_max base on start_v
+  for (size_t i = 1; i < constraints_.size(); i++) {
+    const auto& prev = constraints_[i - 1];
+    auto& cur = constraints_[i];
+    auto r0 = prev.v_max * prev.v_max - 2 * cur.b_max * s_step_;
+    if (r0 > 0.0) {
+      cur.v_max = std::max(std::sqrt(r0), cur.v_max);
+    } else {
+      break;
+    }
+  }
+
   // preprocess v_max base on b_max
   for (ssize_t i = constraints_.size() - 2; i >= 0; i--) {
     const auto& next = constraints_[i + 1];
@@ -261,22 +274,24 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
     // compute t_min base on v_max
     auto t_min = std::max(prev.t, constraints.t_min);
     auto v_max = constraints.v_max;
-    t_min = std::max(prev.t + s_step_ / v_max, t_min);
+    t_min = std::max(prev.t + 2.0 * s_step_ / (prev.v + v_max), t_min);
 
     // compute t_max base on b_max
     auto t_max = std::numeric_limits<double>::infinity();
     auto b_max = constraints.b_max;
-    if (prev.v * prev.v / (2 * b_max) > s_step_)
-      t_max =
-          prev.t +
-          (prev.v - std::sqrt(prev.v * prev.v - 2 * b_max * s_step_)) / b_max;
+    auto r0 = prev.v * prev.v - 2 * b_max * s_step_;
+    if (r0 > 0.0) t_max = prev.t + (prev.v - std::sqrt(r0)) / b_max;
 
     // if t_max < t_min
     if (t_max < t_min) {
-      AERROR << "failure to satisfy the constraints.";
-      points.resize(i);
-      return Status(ErrorCode::PLANNING_ERROR,
-                    "failure to satisfy the constraints.");
+      if (t_min - t_max < kTimeDeviation) {
+        t_max = t_min;
+      } else {
+        AERROR << "failure to satisfy the constraints.";
+        points.resize(i);
+        return Status(ErrorCode::PLANNING_ERROR,
+                      "failure to satisfy the constraints.");
+      }
     }
 
     // compute t_preffered base on v_preffered

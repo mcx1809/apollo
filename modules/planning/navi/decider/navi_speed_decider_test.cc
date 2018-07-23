@@ -237,7 +237,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForCurve) {
   EXPECT_EQ(
       Status::OK(),
       speed_decider.MakeSpeedDecision(
-          0.0, 10.0, 0.0, 0.0, 100.0, path_points, obstacles,
+          0.0, 12.0, 0.0, 0.0, 100.0, path_points, obstacles,
           [&](const std::string& id) mutable { return &obstacle_buf[id]; },
           1000, &speed_data));
   for (auto& p : speed_data.speed_vector()) {
