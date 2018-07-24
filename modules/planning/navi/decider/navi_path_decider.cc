@@ -174,8 +174,7 @@ apollo::common::Status NaviPathDecider::Process(
   ShiftY(shift_distance_y, &path_points);
 
   // adjust start path point theta
-  double diff_theta = path_points[0].theta() - vehicle_state_.heading();
-  double new_start_point_theta = diff_theta + delta_theta;
+  double new_start_point_theta = path_points[0].theta() + delta_theta;
   path_points[0].set_theta(new_start_point_theta);
 
   // calculate the value of the path trajectory later

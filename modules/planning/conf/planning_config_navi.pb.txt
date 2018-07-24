@@ -189,7 +189,7 @@ navi_planner_config {
         min_look_forward_time: 2
         default_min_smooth_init_y: 0.05
         default_max_smooth_init_y: 0.5
-        default_theta_change_ratio: 15.0
+        default_theta_change_ratio: 0.0
         max_lateral_distance: 6.0
         path_l_cost: 6.5
         later_shift_config_table {
@@ -197,25 +197,25 @@ navi_planner_config {
                 max_speed: 4.16
                 min_distance: 0.05
                 max_distance: 0.5
-                theta_change_ratio: 25.0
+                theta_change_ratio: 0.0
             }
             lateral_shift {
                 max_speed: 8.32
                 min_distance: 0.05
                 max_distance: 0.5
-                theta_change_ratio: 20.0
+                theta_change_ratio: 0.0
             }
             lateral_shift {
                 max_speed: 16.64
                 min_distance: 0.05
                 max_distance: 0.35
-                theta_change_ratio: 15.0
+                theta_change_ratio: 0.0
             }
             lateral_shift {
                 max_speed: 33.28
                 min_distance: 0.05
                 max_distance: 0.35
-                theta_change_ratio: 15.0
+                theta_change_ratio: 0.0
             }
         }
     }
