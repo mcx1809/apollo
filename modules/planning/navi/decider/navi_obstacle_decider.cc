@@ -120,7 +120,7 @@ int NaviObstacleDecider::ProcessPathObstacle(
       if (current_obstacle->Perception().velocity().x() > 0.0) {
         continue;
       }
-      if (FLAGS_noenable_side_radar) {
+      if (!FLAGS_enable_side_radar) {
         if (current_obstacle->Perception().velocity().x() < 0.0) {
           continue;
         }
@@ -146,24 +146,6 @@ int NaviObstacleDecider::ProcessPathObstacle(
       if ((proj_len == 0) || (proj_len >= path_data_points.back().s())) {
         continue;
       }
-      /*p1.set_x(projection_point.x());
-      p1.set_y(projection_point.y());
-      if ((proj_len + 1) > path_data_points.back().s()) {
-        p2.set_x(path_data_points.back().x());
-        p2.set_y(path_data_points.back().y());
-      } else {
-        point = PathMatcher::MatchToPath(path_data_points, (proj_len + 1));
-        p2.set_x(point.x());
-        p2.set_y(point.y());
-      }
-      auto d = ((current_obstacle->Perception().position().x() - p1.x()) *
-                (p2.y() - p1.y())) -
-               ((current_obstacle->Perception().position().y() - p1.y()) *
-                (p2.x() - p1.x()));
-      if (d > 0) {
-        dist *= -1;
-      }*/
-
       JudgePointLeftOrRight(projection_point, path_data_points,
                             current_obstacle, proj_len, &dist);
       obstacle_lat_dist_.emplace(std::pair<double, double>(
