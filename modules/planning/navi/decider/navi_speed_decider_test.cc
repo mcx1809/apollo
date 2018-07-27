@@ -121,7 +121,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
                               },
                               1000, &speed_data));
   for (auto& p : speed_data.speed_vector()) {
-    if (p.s() > 43.0) EXPECT_NEAR(0.0, p.v(), 1.0);
+    if (p.s() > 38.0) EXPECT_NEAR(0.0, p.v(), 1.0);
   }
 }
 
@@ -180,8 +180,8 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
           [&](const std::string& id) mutable { return &obstacle_buf[id]; },
           1000, &speed_data));
   for (auto& p : speed_data.speed_vector()) {
-    if (p.s() > 20.0 && p.s() < 30.0) EXPECT_NEAR(5.0, p.v(), 0.5);
-    if (p.s() > 43) EXPECT_NEAR(0.0, p.v(), 1.0);
+    if (p.s() > 15.0 && p.s() < 26.0) EXPECT_NEAR(5.0, p.v(), 0.5);
+    if (p.s() > 38.0) EXPECT_NEAR(0.0, p.v(), 1.0);
   }
 }
 

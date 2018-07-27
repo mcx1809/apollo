@@ -45,7 +45,8 @@ namespace {
 constexpr double kTsGraphSStep = 0.4;
 constexpr double kTsGraphSMax = 100.0;
 constexpr size_t kFallbackSpeedPointNum = 4;
-constexpr size_t kSpeedPointNumLimit = 100;
+//
+constexpr size_t kSpeedPointNumLimit = 200;
 constexpr double kSpeedPointSLimit = 100.0;
 constexpr double kSpeedPointTimeLimit = 50.0;
 }  // namespace
@@ -274,7 +275,8 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
     return std::max(0.0, d - front_edge_to_center - obstacle_buffer_);
   };
   auto get_safe_distance = [&](double v) -> double {
-    return safe_distance_ratio_ * v + safe_distance_base_;
+    return safe_distance_ratio_ * v + safe_distance_base_ +
+           front_edge_to_center + obstacle_buffer_;
   };
 
   // add obstacles from perception
@@ -283,10 +285,15 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
     const auto& id = std::get<0>(info);
     const auto* obstacle = find_obstacle(id);
     if (obstacle != nullptr) {
-      // TODO(all): rel s of obstacle？
-      auto obstacle_distance = get_obstacle_distance(std::get<1>(info));
-      auto obstacle_speed = std::max(std::get<2>(info) + vehicle_speed, 0.0);
+      auto s = std::get<1>(info);
+      auto obstacle_distance = get_obstacle_distance(s);
+      auto rel_speed = std::get<2>(info);
+      auto obstacle_speed = std::max(rel_speed + vehicle_speed, 0.0);
       auto safe_distance = get_safe_distance(obstacle_speed);
+      ADEBUG << "obstacle_distance: " << obstacle_distance
+             << " obstacle_speed: " << obstacle_speed
+             << " safe_distance: " << safe_distance;
+
       ts_graph_.UpdateObstacleConstraints(obstacle_distance, safe_distance,
                                           following_accel_ratio_,
                                           obstacle_speed, preferred_speed_);
