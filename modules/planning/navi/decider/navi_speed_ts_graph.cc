@@ -210,7 +210,11 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
     auto& cur = constraints_[i];
     auto r0 = prev.v_max * prev.v_max - 2 * cur.b_max * s_step_;
     if (r0 > 0.0) {
-      cur.v_max = std::max(std::sqrt(r0), cur.v_max);
+      auto v_max = std::sqrt(r0);
+      if (v_max > cur.v_max)
+        cur.v_max = v_max;
+      else
+        break;
     } else {
       break;
     }

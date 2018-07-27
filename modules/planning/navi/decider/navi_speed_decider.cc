@@ -28,6 +28,7 @@
 #include "glog/logging.h"
 
 #include "modules/common/configs/vehicle_config_helper.h"
+#include "modules/common/math/math_utils.h"
 #include "modules/planning/common/planning_gflags.h"
 
 namespace apollo {
@@ -37,6 +38,7 @@ using apollo::common::ErrorCode;
 using apollo::common::PathPoint;
 using apollo::common::Status;
 using apollo::common::VehicleConfigHelper;
+using apollo::common::math::Clamp;
 using apollo::common::util::MakePathPoint;
 
 namespace {
@@ -44,6 +46,8 @@ constexpr double kTsGraphSStep = 0.4;
 constexpr double kTsGraphSMax = 100.0;
 constexpr size_t kFallbackSpeedPointNum = 4;
 constexpr size_t kSpeedPointNumLimit = 100;
+constexpr double kSpeedPointSLimit = 100.0;
+constexpr double kSpeedPointTimeLimit = 50.0;
 }  // namespace
 
 NaviSpeedDecider::NaviSpeedDecider() : Task("NaviSpeedDecider") {}
@@ -140,6 +144,15 @@ Status NaviSpeedDecider::Execute(Frame* frame,
                          : 0.0;
   preferred_speed_ = std::min(max_speed_, preferred_speed_);
 
+  // get the start point
+  const auto& planning_start_point = frame->PlanningStartPoint();
+  auto start_v = planning_start_point.has_v() ? planning_start_point.v() : 0.0;
+  start_v = std::max(0.0, start_v);
+  auto start_a = planning_start_point.has_a() ? planning_start_point.a() : 0.0;
+  start_a = Clamp(start_a, max_accel_, -1.0 * max_decel_);
+  auto start_da = 0.0;
+
+  // get the path
   auto& discretized_path = reference_line_info_->path_data().discretized_path();
   const auto& path_points = discretized_path.path_points();
 
@@ -149,17 +162,6 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   auto end_s = discretized_path.EndPoint().has_s()
                    ? discretized_path.EndPoint().s()
                    : kTsGraphSMax;
-
-  // TODO(all): is true?
-  const auto& vehicle_state = frame_->vehicle_state();
-  auto start_v = vehicle_state.has_linear_velocity()
-                     ? vehicle_state.linear_velocity()
-                     : 0.0;
-  start_v = std::max(0.0, start_v);
-  auto start_a = vehicle_state.has_linear_acceleration()
-                     ? vehicle_state.linear_acceleration()
-                     : 0.0;
-  auto start_da = 0.0;
 
   auto ret = MakeSpeedDecision(
       start_s, start_v, start_a, start_da,
@@ -227,14 +229,13 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     return ret;
   }
 
-  // TODO(all): because it is not start from planning_start_point, start_a may
-  // always be zero
-  if (ts_points.size() > 2) ts_points[0].a = ts_points[1].a;
-
   ts_points.resize(std::min(speed_point_num_limit, ts_points.size()));
 
   speed_data->Clear();
   for (auto& ts_point : ts_points) {
+    if (ts_point.s > kSpeedPointSLimit || ts_point.t > kSpeedPointTimeLimit)
+      break;
+
     if (ts_point.v > hard_speed_limit_) {
       AERROR << "The v " << ts_point.v << " of point with s " << ts_point.s
              << " and t " << ts_point.t << "is greater than hard_speed_limit "
