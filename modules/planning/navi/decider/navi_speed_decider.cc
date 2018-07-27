@@ -45,7 +45,6 @@ namespace {
 constexpr double kTsGraphSStep = 0.4;
 constexpr double kTsGraphSMax = 100.0;
 constexpr size_t kFallbackSpeedPointNum = 4;
-//
 constexpr size_t kSpeedPointNumLimit = 200;
 constexpr double kSpeedPointSLimit = 100.0;
 constexpr double kSpeedPointTimeLimit = 50.0;
@@ -253,6 +252,12 @@ Status NaviSpeedDecider::MakeSpeedDecision(
 
     speed_data->AppendSpeedPoint(ts_point.s + start_s, ts_point.t, ts_point.v,
                                  ts_point.a, ts_point.da);
+  }
+
+  const auto& speed_vector = speed_data->speed_vector();
+  if (speed_vector.size() == 1) {
+    const auto& prev = speed_vector.back();
+    speed_data->AppendSpeedPoint(prev.s(), prev.t() + 1.0, 0.0, 0.0, 0.0);
   }
 
   return Status::OK();

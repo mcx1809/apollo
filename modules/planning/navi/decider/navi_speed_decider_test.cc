@@ -103,7 +103,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
   path_points.emplace_back(MakePathPoint(100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
   // obstacle1
-  perception_obstacle.mutable_position()->set_x(50.0);
+  perception_obstacle.mutable_position()->set_x(5.0);
   perception_obstacle.mutable_position()->set_y(1.0);
   perception_obstacle.mutable_velocity()->set_x(0.0);
   perception_obstacle.mutable_velocity()->set_y(0.0);
