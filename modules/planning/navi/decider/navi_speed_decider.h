@@ -146,9 +146,11 @@ class NaviSpeedDecider : public Task {
   double safe_distance_base_;
   double safe_distance_ratio_;
   double following_accel_ratio_;
-  double centric_accel_limit_;
+  double soft_centric_accel_limit_;
+  double hard_centric_accel_limit_;
   double hard_speed_limit_;
   double hard_accel_limit_;
+  bool enable_safe_path_;
 
   NaviObstacleDecider obstacle_decider_;
   NaviSpeedTsGraph ts_graph_;

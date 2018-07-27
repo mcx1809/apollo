@@ -204,22 +204,6 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
   constraints.da_max = start_da_;
   constraints.da_preffered = start_da_;
 
-  // preprocess v_max base on start_v
-  for (size_t i = 1; i < constraints_.size(); i++) {
-    const auto& prev = constraints_[i - 1];
-    auto& cur = constraints_[i];
-    auto r0 = prev.v_max * prev.v_max - 2 * cur.b_max * s_step_;
-    if (r0 > 0.0) {
-      auto v_max = std::sqrt(r0);
-      if (v_max > cur.v_max)
-        cur.v_max = v_max;
-      else
-        break;
-    } else {
-      break;
-    }
-  }
-
   // preprocess v_max base on b_max
   for (ssize_t i = constraints_.size() - 2; i >= 0; i--) {
     const auto& next = constraints_[i + 1];

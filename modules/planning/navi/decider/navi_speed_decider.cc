@@ -43,10 +43,9 @@ using apollo::common::util::MakePathPoint;
 
 namespace {
 constexpr double kTsGraphSStep = 0.4;
-constexpr double kTsGraphSMax = 100.0;
 constexpr size_t kFallbackSpeedPointNum = 4;
 constexpr size_t kSpeedPointNumLimit = 200;
-constexpr double kSpeedPointSLimit = 100.0;
+constexpr double kSpeedPointSLimit = 200.0;
 constexpr double kSpeedPointTimeLimit = 50.0;
 }  // namespace
 
@@ -83,13 +82,19 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
             .has_following_accel_ratio());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
-            .has_centric_accel_limit());
+            .has_soft_centric_accel_limit());
+  CHECK(config.navi_planner_config()
+            .navi_speed_decider_config()
+            .has_hard_centric_accel_limit());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
             .has_hard_speed_limit());
   CHECK(config.navi_planner_config()
             .navi_speed_decider_config()
             .has_hard_accel_limit());
+  CHECK(config.navi_planner_config()
+            .navi_speed_decider_config()
+            .has_enable_safe_path());
 
   max_speed_ = FLAGS_planning_upper_speed_limit;
   preferred_accel_ = std::abs(config.navi_planner_config()
@@ -120,15 +125,23 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   following_accel_ratio_ = std::abs(config.navi_planner_config()
                                         .navi_speed_decider_config()
                                         .following_accel_ratio());
-  centric_accel_limit_ = std::abs(config.navi_planner_config()
-                                      .navi_speed_decider_config()
-                                      .centric_accel_limit());
+  soft_centric_accel_limit_ = std::abs(config.navi_planner_config()
+                                           .navi_speed_decider_config()
+                                           .soft_centric_accel_limit());
+  hard_centric_accel_limit_ = std::abs(config.navi_planner_config()
+                                           .navi_speed_decider_config()
+                                           .hard_centric_accel_limit());
+  soft_centric_accel_limit_ =
+      std::min(hard_centric_accel_limit_, soft_centric_accel_limit_);
   hard_speed_limit_ = std::abs(config.navi_planner_config()
                                    .navi_speed_decider_config()
                                    .hard_speed_limit());
   hard_accel_limit_ = std::abs(config.navi_planner_config()
                                    .navi_speed_decider_config()
                                    .hard_accel_limit());
+  enable_safe_path_ = config.navi_planner_config()
+                          .navi_speed_decider_config()
+                          .enable_safe_path();
 
   return true;
 }
@@ -161,11 +174,11 @@ Status NaviSpeedDecider::Execute(Frame* frame,
                      : 0.0;
   auto end_s = discretized_path.EndPoint().has_s()
                    ? discretized_path.EndPoint().s()
-                   : kTsGraphSMax;
+                   : 0.0;
 
   auto ret = MakeSpeedDecision(
-      start_s, start_v, start_a, start_da,
-      std::min(kTsGraphSMax, end_s - start_s), path_points, frame_->obstacles(),
+      start_s, start_v, start_a, start_da, end_s - start_s, path_points,
+      frame_->obstacles(),
       [&](const std::string& id) { return frame_->Find(id); },
       kSpeedPointNumLimit, reference_line_info_->mutable_speed_data());
   RecordDebugInfo(reference_line_info->speed_data());
@@ -174,6 +187,7 @@ Status NaviSpeedDecider::Execute(Frame* frame,
     AERROR << "Reference Line " << reference_line_info->Lanes().Id()
            << " is not drivable after " << Name();
   }
+
   return ret;
 }
 
@@ -185,7 +199,16 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     size_t speed_point_num_limit, SpeedData* const speed_data) {
   CHECK_NOTNULL(speed_data);
 
-  // TODO(all): if start_v > max speed
+  ADEBUG << "start to make speed decision, start_s: " << start_s
+         << " start_v: " << start_v << " start_a: " << start_a
+         << " start_da: " << start_da
+         << " planning_length: " << planning_length;
+
+  if (start_v > max_speed_) {
+    AERROR << "exceeding maximum allowable speed.";
+    return Status(ErrorCode::PLANNING_ERROR,
+                  "exceeding maximum allowable speed.");
+  }
 
   // init t-s graph
   if (planning_length > kTsGraphSStep)
@@ -237,15 +260,15 @@ Status NaviSpeedDecider::MakeSpeedDecision(
       break;
 
     if (ts_point.v > hard_speed_limit_) {
-      AERROR << "The v " << ts_point.v << " of point with s " << ts_point.s
-             << " and t " << ts_point.t << "is greater than hard_speed_limit "
+      AERROR << "The v: " << ts_point.v << " of point with s: " << ts_point.s
+             << " and t: " << ts_point.t << "is greater than hard_speed_limit "
              << hard_speed_limit_;
       ts_point.v = hard_speed_limit_;
     }
 
     if (ts_point.a > hard_accel_limit_) {
-      AERROR << "The a " << ts_point.a << " of point with s " << ts_point.s
-             << " and t " << ts_point.t << "is greater than hard_accel_limit "
+      AERROR << "The a: " << ts_point.a << " of point with s: " << ts_point.s
+             << " and t: " << ts_point.t << "is greater than hard_accel_limit "
              << hard_accel_limit_;
       ts_point.a = hard_accel_limit_;
     }
@@ -295,8 +318,8 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
       auto rel_speed = std::get<2>(info);
       auto obstacle_speed = std::max(rel_speed + vehicle_speed, 0.0);
       auto safe_distance = get_safe_distance(obstacle_speed);
-      ADEBUG << "obstacle_distance: " << obstacle_distance
-             << " obstacle_speed: " << obstacle_speed
+      ADEBUG << "obstacle with id: " << id << " distance: " << obstacle_distance
+             << " speed: " << obstacle_speed
              << " safe_distance: " << safe_distance;
 
       ts_graph_.UpdateObstacleConstraints(obstacle_distance, safe_distance,
@@ -306,11 +329,13 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
   }
 
   // the end of path just as an obstacle
-  auto obstacle_distance = get_obstacle_distance(path_length);
-  auto safe_distance = get_safe_distance(0.0);
-  ts_graph_.UpdateObstacleConstraints(obstacle_distance, safe_distance,
-                                      following_accel_ratio_, 0.0,
-                                      preferred_speed_);
+  if (enable_safe_path_) {
+    auto obstacle_distance = get_obstacle_distance(path_length);
+    auto safe_distance = get_safe_distance(0.0);
+    ts_graph_.UpdateObstacleConstraints(obstacle_distance, safe_distance,
+                                        following_accel_ratio_, 0.0,
+                                        preferred_speed_);
+  }
 
   return Status::OK();
 }
@@ -338,12 +363,14 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     auto start_k = prev.has_kappa() ? prev.kappa() : 0.0;
     auto end_k = cur.has_kappa() ? cur.kappa() : 0.0;
     auto kappa = std::abs((start_k + end_k) / 2.0);
-    auto v_max = std::min(std::sqrt(centric_accel_limit_ / kappa),
+    auto v_preffered = std::min(std::sqrt(soft_centric_accel_limit_ / kappa),
+                                std::numeric_limits<double>::max());
+    auto v_max = std::min(std::sqrt(hard_centric_accel_limit_ / kappa),
                           std::numeric_limits<double>::max());
 
     NaviSpeedTsConstraints constraints;
     constraints.v_max = v_max;
-    constraints.v_preffered = v_max;
+    constraints.v_preffered = v_preffered;
     ts_graph_.UpdateRangeConstraints(start_s, end_s, constraints);
   }
 
