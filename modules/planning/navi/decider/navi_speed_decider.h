@@ -70,11 +70,9 @@ class NaviSpeedDecider : public Task {
  private:
   /**
    * @brief Create speed-data.
-   * @param start_s S of planning start point.
    * @param start_v V of planning start point.
    * @param start_a A of planning start point.
    * @param start_da Da of planning start point.
-   * @param planning_length Planning length.
    * @param path_points Current path data.
    * @param obstacles Current obstacles.
    * @param find_obstacle Find obstacle from id.
@@ -83,8 +81,8 @@ class NaviSpeedDecider : public Task {
    * @return Status::OK() if a suitable speed-data is created; error otherwise.
    */
   apollo::common::Status MakeSpeedDecision(
-      double start_s, double start_v, double start_a, double start_da,
-      double planning_length, const std::vector<common::PathPoint>& path_points,
+      double start_v, double start_a, double start_da,
+      const std::vector<common::PathPoint>& path_points,
       const std::vector<const Obstacle*>& obstacles,
       const std::function<const Obstacle*(const std::string& id)>&
           find_obstacle,

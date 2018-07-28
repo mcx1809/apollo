@@ -169,16 +169,8 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   auto& discretized_path = reference_line_info_->path_data().discretized_path();
   const auto& path_points = discretized_path.path_points();
 
-  auto start_s = discretized_path.StartPoint().has_s()
-                     ? discretized_path.StartPoint().s()
-                     : 0.0;
-  auto end_s = discretized_path.EndPoint().has_s()
-                   ? discretized_path.EndPoint().s()
-                   : 0.0;
-
   auto ret = MakeSpeedDecision(
-      start_s, start_v, start_a, start_da, end_s - start_s, path_points,
-      frame_->obstacles(),
+      start_v, start_a, start_da, path_points, frame_->obstacles(),
       [&](const std::string& id) { return frame_->Find(id); },
       kSpeedPointNumLimit, reference_line_info_->mutable_speed_data());
   RecordDebugInfo(reference_line_info->speed_data());
@@ -192,31 +184,35 @@ Status NaviSpeedDecider::Execute(Frame* frame,
 }
 
 Status NaviSpeedDecider::MakeSpeedDecision(
-    double start_s, double start_v, double start_a, double start_da,
-    double planning_length, const std::vector<PathPoint>& path_points,
+    double start_v, double start_a, double start_da,
+    const std::vector<PathPoint>& path_points,
     const std::vector<const Obstacle*>& obstacles,
     const std::function<const Obstacle*(const std::string&)>& find_obstacle,
     size_t speed_point_num_limit, SpeedData* const speed_data) {
   CHECK_NOTNULL(speed_data);
+  CHECK_GE(path_points.size(), 2);
 
-  ADEBUG << "start to make speed decision, start_s: " << start_s
-         << " start_v: " << start_v << " start_a: " << start_a
-         << " start_da: " << start_da
-         << " planning_length: " << planning_length;
+  auto start_s = path_points.front().has_s() ? path_points.front().s() : 0.0;
+  auto end_s = path_points.back().has_s() ? path_points.back().s() : start_s;
+  auto planning_length = end_s - start_s;
+
+  ADEBUG << "start to make speed decision,  start_v: " << start_v
+         << " start_a: " << start_a << " start_da: " << start_da
+         << " start_s: " << start_s << " planning_length: " << planning_length;
 
   if (start_v > max_speed_) {
     AERROR << "exceeding maximum allowable speed.";
     return Status(ErrorCode::PLANNING_ERROR,
                   "exceeding maximum allowable speed.");
   }
+  start_v = std::max(0.0, start_v);
+
+  auto s_step = planning_length > kTsGraphSStep
+                    ? kTsGraphSStep
+                    : planning_length / kFallbackSpeedPointNum;
 
   // init t-s graph
-  if (planning_length > kTsGraphSStep)
-    ts_graph_.Reset(kTsGraphSStep, planning_length, std::max(start_v, 0.0),
-                    start_a, start_da);
-  else
-    ts_graph_.Reset(planning_length / kFallbackSpeedPointNum, planning_length,
-                    std::max(start_v, 0.0), start_a, start_da);
+  ts_graph_.Reset(s_step, planning_length, start_v, start_a, start_da);
 
   // add t-s constraints
   auto ret = AddPerceptionRangeConstraints();
@@ -353,8 +349,9 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
   }
 
   double max_kappa = 0.0;
-  double max_kappa_v = 0.0;
-  const auto bs = path_points[0].s();
+  double max_kappa_v = std::numeric_limits<double>::max();
+  double max_kappa_s = 0.0;
+  const auto bs = path_points[0].has_s() ? path_points[0].s() : 0.0;
   for (size_t i = 1; i < path_points.size(); i++) {
     const auto& prev = path_points[i - 1];
     const auto& cur = path_points[i];
@@ -365,7 +362,6 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     auto start_k = prev.has_kappa() ? prev.kappa() : 0.0;
     auto end_k = cur.has_kappa() ? cur.kappa() : 0.0;
     auto kappa = std::abs((start_k + end_k) / 2.0);
-    if (kappa > max_kappa) max_kappa = kappa;
     auto v_preffered = std::min(std::sqrt(soft_centric_accel_limit_ / kappa),
                                 std::numeric_limits<double>::max());
     auto v_max = std::min(std::sqrt(hard_centric_accel_limit_ / kappa),
@@ -375,10 +371,16 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     constraints.v_max = v_max;
     constraints.v_preffered = v_preffered;
     ts_graph_.UpdateRangeConstraints(start_s, end_s, constraints);
+
+    if (kappa > max_kappa) {
+      max_kappa = kappa;
+      max_kappa_v = v_max;
+      max_kappa_s = start_s;
+    }
   }
 
   ADEBUG << "add speed limit for centric acceleration ｗith kappa: "
-         << max_kappa << " v_max: " << max_kappa_v;
+         << max_kappa << " v_max: " << max_kappa_v << " s: " << max_kappa_s;
 
   return Status::OK();
 }

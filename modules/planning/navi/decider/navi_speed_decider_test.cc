@@ -38,6 +38,12 @@ using apollo::perception::PerceptionObstacle;
 namespace apollo {
 namespace planning {
 
+static PathPoint GenPathPoint(double s, double kappa = 0.0) {
+  auto path_point = MakePathPoint(s, 0.0, 0.0, 0.0, kappa, 0.0, 0.0);
+  path_point.set_s(s);
+  return path_point;
+}
+
 TEST(NaviSpeedDeciderTest, CreateSpeedData) {
   NaviSpeedDecider speed_decider;
   speed_decider.preferred_speed_ = 10.0;
@@ -62,12 +68,12 @@ TEST(NaviSpeedDeciderTest, CreateSpeedData) {
   std::vector<const Obstacle*> obstacles;
 
   std::vector<PathPoint> path_points;
-  path_points.emplace_back(MakePathPoint(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-  path_points.emplace_back(MakePathPoint(100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+  path_points.emplace_back(GenPathPoint(0.0));
+  path_points.emplace_back(GenPathPoint(100.0));
 
   SpeedData speed_data;
   EXPECT_EQ(Status::OK(), speed_decider.MakeSpeedDecision(
-                              0.0, 0.0, 0.0, 0.0, 100.0, path_points, obstacles,
+                              0.0, 0.0, 0.0, path_points, obstacles,
                               [&](const std::string& id) mutable {
                                 return &obstacle_buf[id];
                               },
@@ -103,8 +109,8 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
   std::vector<const Obstacle*> obstacles;
 
   std::vector<PathPoint> path_points;
-  path_points.emplace_back(MakePathPoint(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-  path_points.emplace_back(MakePathPoint(100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+  path_points.emplace_back(GenPathPoint(0.0));
+  path_points.emplace_back(GenPathPoint(100.0));
 
   // obstacle1
   perception_obstacle.mutable_position()->set_x(5.0);
@@ -119,7 +125,7 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle) {
 
   SpeedData speed_data;
   EXPECT_EQ(Status::OK(), speed_decider.MakeSpeedDecision(
-                              0.0, 0.0, 0.0, 0.0, 100.0, path_points, obstacles,
+                              0.0, 0.0, 0.0, path_points, obstacles,
                               [&](const std::string& id) mutable {
                                 return &obstacle_buf[id];
                               },
@@ -153,8 +159,8 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
   std::vector<const Obstacle*> obstacles;
 
   std::vector<PathPoint> path_points;
-  path_points.emplace_back(MakePathPoint(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-  path_points.emplace_back(MakePathPoint(100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+  path_points.emplace_back(GenPathPoint(0.0));
+  path_points.emplace_back(GenPathPoint(100.0));
 
   // obstacle1
   perception_obstacle.mutable_position()->set_x(50.0);
@@ -179,12 +185,12 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForObstacles) {
   obstacles.emplace_back(&obstacle_buf[id]);
 
   SpeedData speed_data;
-  EXPECT_EQ(
-      Status::OK(),
-      speed_decider.MakeSpeedDecision(
-          0.0, 10.0, 0.0, 0.0, 100.0, path_points, obstacles,
-          [&](const std::string& id) mutable { return &obstacle_buf[id]; },
-          1000, &speed_data));
+  EXPECT_EQ(Status::OK(), speed_decider.MakeSpeedDecision(
+                              10.0, 0.0, 0.0, path_points, obstacles,
+                              [&](const std::string& id) mutable {
+                                return &obstacle_buf[id];
+                              },
+                              1000, &speed_data));
   for (auto& p : speed_data.speed_vector()) {
     if (p.s() > 15.0 && p.s() < 26.0) EXPECT_NEAR(5.0, p.v(), 0.5);
     if (p.s() > 38.0) EXPECT_NEAR(0.0, p.v(), 1.0);
@@ -215,47 +221,42 @@ TEST(NaviSpeedDeciderTest, CreateSpeedDataForCurve) {
   std::vector<const Obstacle*> obstacles;
 
   std::vector<PathPoint> path_points;
-  auto make_path_point = [](double s, double kappa) {
-    auto path_point = MakePathPoint(s, 0.0, 0.0, 0.0, kappa, 0.0, 0.0);
-    path_point.set_s(s);
-    return path_point;
-  };
   double s = 0.0;
-  path_points.emplace_back(make_path_point(s, 0.0));
+  path_points.emplace_back(GenPathPoint(s, 0.0));
   s += 50.0;
-  path_points.emplace_back(make_path_point(s, 0.0));
+  path_points.emplace_back(GenPathPoint(s, 0.0));
   for (size_t i = 1; i <= 5; i++) {
     s += 1.0;
-    path_points.emplace_back(make_path_point(s, 0.03 * i));
+    path_points.emplace_back(GenPathPoint(s, 0.03 * i));
   }
   for (size_t i = 1; i <= 5; i++) {
     s += 1.0;
-    path_points.emplace_back(make_path_point(s, 0.15));
+    path_points.emplace_back(GenPathPoint(s, 0.15));
   }
   for (size_t i = 1; i <= 5; i++) {
     s += 1.0;
-    path_points.emplace_back(make_path_point(s, 0.03 * (5 - i)));
+    path_points.emplace_back(GenPathPoint(s, 0.03 * (5 - i)));
   }
   s += 1.0;
-  path_points.emplace_back(make_path_point(s, 0.0));
+  path_points.emplace_back(GenPathPoint(s, 0.0));
   s += 10.0;
-  path_points.emplace_back(make_path_point(s, 0.0));
+  path_points.emplace_back(GenPathPoint(s, 0.0));
   for (size_t i = 1; i <= 10; i++) {
     s += 1.0;
-    path_points.emplace_back(make_path_point(s, -0.07));
+    path_points.emplace_back(GenPathPoint(s, -0.07));
   }
   for (size_t i = 1; i <= 10; i++) {
     s += 1.0;
-    path_points.emplace_back(make_path_point(s, 0.07));
+    path_points.emplace_back(GenPathPoint(s, 0.07));
   }
   s += 1.0;
-  path_points.emplace_back(make_path_point(s, 0.0));
+  path_points.emplace_back(GenPathPoint(s, 0.0));
   s += 20.0;
-  path_points.emplace_back(make_path_point(s, 0.0));
+  path_points.emplace_back(GenPathPoint(s, 0.0));
 
   SpeedData speed_data;
   EXPECT_EQ(Status::OK(), speed_decider.MakeSpeedDecision(
-                              0.0, 12.1, 0.0, 0.0, s, path_points, obstacles,
+                              12.1, 0.0, 0.0, path_points, obstacles,
                               [&](const std::string& id) mutable {
                                 return &obstacle_buf[id];
                               },
