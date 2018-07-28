@@ -76,7 +76,6 @@ class NaviSpeedDecider : public Task {
    * @param path_points Current path data.
    * @param obstacles Current obstacles.
    * @param find_obstacle Find obstacle from id.
-   * @param speed_point_num_limit Limit length of speed points.
    * @param speed_data Output.
    * @return Status::OK() if a suitable speed-data is created; error otherwise.
    */
@@ -86,7 +85,7 @@ class NaviSpeedDecider : public Task {
       const std::vector<const Obstacle*>& obstacles,
       const std::function<const Obstacle*(const std::string& id)>&
           find_obstacle,
-      size_t speed_point_num_limit, SpeedData* const speed_data);
+      SpeedData* const speed_data);
 
   /**
    * @brief Add t-s constraints base on range of perception.

@@ -44,7 +44,6 @@ using apollo::common::util::MakePathPoint;
 namespace {
 constexpr double kTsGraphSStep = 0.4;
 constexpr size_t kFallbackSpeedPointNum = 4;
-constexpr size_t kSpeedPointNumLimit = 200;
 constexpr double kSpeedPointSLimit = 200.0;
 constexpr double kSpeedPointTimeLimit = 50.0;
 }  // namespace
@@ -172,7 +171,7 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   auto ret = MakeSpeedDecision(
       start_v, start_a, start_da, path_points, frame_->obstacles(),
       [&](const std::string& id) { return frame_->Find(id); },
-      kSpeedPointNumLimit, reference_line_info_->mutable_speed_data());
+      reference_line_info_->mutable_speed_data());
   RecordDebugInfo(reference_line_info->speed_data());
   if (ret != Status::OK()) {
     reference_line_info->SetDrivable(false);
@@ -188,7 +187,7 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     const std::vector<PathPoint>& path_points,
     const std::vector<const Obstacle*>& obstacles,
     const std::function<const Obstacle*(const std::string&)>& find_obstacle,
-    size_t speed_point_num_limit, SpeedData* const speed_data) {
+    SpeedData* const speed_data) {
   CHECK_NOTNULL(speed_data);
   CHECK_GE(path_points.size(), 2);
 
@@ -247,8 +246,6 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     AERROR << "Solve speed points failed";
     return ret;
   }
-
-  ts_points.resize(std::min(speed_point_num_limit, ts_points.size()));
 
   speed_data->Clear();
   for (auto& ts_point : ts_points) {
