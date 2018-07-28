@@ -352,6 +352,8 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     return Status(ErrorCode::PLANNING_ERROR, "too few path points.");
   }
 
+  double max_kappa = 0.0;
+  double max_kappa_v = 0.0;
   const auto bs = path_points[0].s();
   for (size_t i = 1; i < path_points.size(); i++) {
     const auto& prev = path_points[i - 1];
@@ -363,6 +365,7 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     auto start_k = prev.has_kappa() ? prev.kappa() : 0.0;
     auto end_k = cur.has_kappa() ? cur.kappa() : 0.0;
     auto kappa = std::abs((start_k + end_k) / 2.0);
+    if (kappa > max_kappa) max_kappa = kappa;
     auto v_preffered = std::min(std::sqrt(soft_centric_accel_limit_ / kappa),
                                 std::numeric_limits<double>::max());
     auto v_max = std::min(std::sqrt(hard_centric_accel_limit_ / kappa),
@@ -373,6 +376,9 @@ Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     constraints.v_preffered = v_preffered;
     ts_graph_.UpdateRangeConstraints(start_s, end_s, constraints);
   }
+
+  ADEBUG << "add speed limit for centric acceleration ｗith kappa: "
+         << max_kappa << " v_max: " << max_kappa_v;
 
   return Status::OK();
 }
