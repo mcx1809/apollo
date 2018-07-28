@@ -232,8 +232,8 @@ navi_planner_config {
         following_accel_ratio: 0.5
         soft_centric_accel_limit: 1.2
         hard_centric_accel_limit: 1.5
-        hard_speed_limit: 10.0
-        hard_accel_limit: 6.0
+        hard_speed_limit: 40.0
+        hard_accel_limit: 8.0
         enable_safe_path: true
     }
 }
