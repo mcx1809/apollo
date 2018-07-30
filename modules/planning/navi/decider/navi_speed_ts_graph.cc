@@ -50,7 +50,6 @@ constexpr double kTimeDeviation = 1.0e-3;
 
 static void CheckConstraints(const NaviSpeedTsConstraints& constraints) {
   CHECK_GE(constraints.t_min, 0.0);
-  CHECK_LE(constraints.t_min, constraints.t_preffered);
   CHECK_GE(constraints.v_max, 0.0);
   CHECK_GE(constraints.v_max, constraints.v_preffered);
   CHECK_GE(constraints.a_max, 0.0);
@@ -64,7 +63,6 @@ static void CheckConstraints(const NaviSpeedTsConstraints& constraints) {
 static void CombineConstraints(const NaviSpeedTsConstraints& constraints,
                                NaviSpeedTsConstraints* dst) {
   dst->t_min = std::max(constraints.t_min, dst->t_min);
-  dst->t_preffered = std::max(constraints.t_preffered, dst->t_preffered);
   dst->v_max = std::min(constraints.v_max, dst->v_max);
   dst->v_preffered = std::min(constraints.v_preffered, dst->v_preffered);
   dst->a_max = std::min(constraints.a_max, dst->a_max);
@@ -206,12 +204,32 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
   constraints.da_max = start_da_;
   constraints.da_preffered = start_da_;
 
-  // preprocess v_preffered base on b_preffered
+  // preprocess v_max base on b_max
+  for (ssize_t i = constraints_.size() - 2; i >= 0; i--) {
+    const auto& next = constraints_[i + 1];
+    auto& cur = constraints_[i];
+    cur.v_max =
+        std::min(std::sqrt(next.v_max * next.v_max + 2 * next.b_max * s_step_),
+                 cur.v_max);
+    cur.v_preffered = std::min(cur.v_max, cur.v_preffered);
+  }
+
+  // preprocess v_max base on a_max
   for (size_t i = 1; i < constraints_.size(); i++) {
     const auto& prev = constraints_[i - 1];
     auto& cur = constraints_[i];
-    cur.v_preffered = std::max(std::sqrt(prev.v_preffered * prev.v_preffered -
-                                         2 * cur.b_preffered * s_step_),
+    cur.v_max =
+        std::min(std::sqrt(prev.v_max * prev.v_max + 2 * cur.a_max * s_step_),
+                 cur.v_max);
+    cur.v_preffered = std::min(cur.v_max, cur.v_preffered);
+  }
+
+  // preprocess v_preffered base on b_preffered
+  for (ssize_t i = constraints_.size() - 2; i >= 0; i--) {
+    const auto& next = constraints_[i + 1];
+    auto& cur = constraints_[i];
+    cur.v_preffered = std::min(std::sqrt(next.v_preffered * next.v_preffered +
+                                         2 * next.b_preffered * s_step_),
                                cur.v_preffered);
   }
 
@@ -224,43 +242,10 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
                                cur.v_preffered);
   }
 
-  // compute t base on v_preffered and t_min
-  std::vector<double> t;
-  t.resize(constraints_.size());
-  t[0] = 0.0;
-  for (size_t i = 1; i < constraints_.size(); i++) {
-    auto prev_t = t[i - 1];
-    auto& cur_t = t[i];
-    auto prev_v = constraints_[i - 1].v_preffered;
-    auto cur_v = constraints_[i].v_preffered;
-    auto t_min = constraints_[i].t_min;
-    cur_t = std::max(prev_t + 2.0 * s_step_ / (prev_v + cur_v), t_min);
-  }
-
-  // compute v
-  std::vector<double> v;
-  v.resize(constraints_.size());
-  v[0] = start_v_;
-  for (size_t i = 1; i < constraints_.size(); i++) {
-    auto prev_t = t[i - 1];
-    auto& cur_t = t[i];
-    auto prev_v = constraints_[i - 1].v_preffered;
-    auto cur_v = constraints_[i].v_preffered;
-    auto t_min = constraints_[i].t_min;
-    cur_t = std::max(prev_t + 2.0 * s_step_ / (prev_v + cur_v), t_min);
-  }
-
-  // preprocess v base on b_preffered
-  for (ssize_t i = constraints_.size() - 1; i > 0; i--) {
-  }
-
-  // preprocess v base on b_max
-
-  // smooth buffer
   std::vector<NaviSpeedTsPoint> points;
   points.resize(constraints_.size());
 
-  // the first point
+  // compute the first point
   auto& point = points[0];
   point.s = 0.0;
   point.t = 0.0;
@@ -268,13 +253,41 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
   point.a = start_a_;
   point.da = start_da_;
 
-  // the remaining points
+  // compute the remaining points
   for (size_t i = 1; i < points.size(); i++) {
     const auto& prev = points[i - 1];
+    const auto& constraints = constraints_[i];
     auto& cur = points[i];
 
+    // compute t_min base on v_max
+    auto t_min = std::max(prev.t, constraints.t_min);
+    auto v_max = constraints.v_max;
+    t_min = std::max(prev.t + 2.0 * s_step_ / (prev.v + v_max), t_min);
+
+    // compute t_max base on b_max
+    auto t_max = std::numeric_limits<double>::infinity();
+    auto b_max = constraints.b_max;
+    auto r0 = prev.v * prev.v - 2 * b_max * s_step_;
+    if (r0 > 0.0) t_max = prev.t + (prev.v - std::sqrt(r0)) / b_max;
+
+    // if t_max < t_min
+    if (t_max < t_min) {
+      if (t_min - t_max < kTimeDeviation) {
+        t_max = t_min;
+      } else {
+        AERROR << "failure to satisfy the constraints.";
+        points.resize(i);
+        return Status(ErrorCode::PLANNING_ERROR,
+                      "failure to satisfy the constraints.");
+      }
+    }
+
+    // compute t_preffered base on v_preffered
+    auto v_preffered = constraints.v_preffered;
+    auto t_preffered = prev.t + 2 * s_step_ / (prev.v + v_preffered);
+
     cur.s = prev.s + s_step_;
-    cur.t = t[i];
+    cur.t = Clamp(t_preffered, t_min, t_max);
     auto dt = cur.t - prev.t;
     cur.v = std::max(2.0 * s_step_ / dt - prev.v, 0.0);
     cur.a = (cur.v - prev.v) / dt;
@@ -287,7 +300,6 @@ Status NaviSpeedTsGraph::Solve(std::vector<NaviSpeedTsPoint>* output) {
     }
   }
 
-  // output
   output->resize(points.size() - 1);
   (*output)[0] = points[0];
 

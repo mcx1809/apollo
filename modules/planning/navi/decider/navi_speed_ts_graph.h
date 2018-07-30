@@ -41,8 +41,6 @@ namespace planning {
 struct NaviSpeedTsConstraints {
   // The minimum timestamp of the point.
   double t_min = 0.0;
-  // The preffered timestamp of the point.
-  double t_preffered = 0.0;
   // The maximum speed of the point.
   double v_max = std::numeric_limits<double>::max();
   // The preffered speed of the point.

@@ -30,7 +30,7 @@ namespace planning {
 
 using apollo::common::Status;
 
-/*TEST(NaviSpeedTsGraph, Solve1) {
+TEST(NaviSpeedTsGraph, Solve1) {
   NaviSpeedTsGraph graph;
   graph.Reset(1.0, 100.0, 0.0, 0.0, 0.0);
 
@@ -111,7 +111,7 @@ TEST(NaviSpeedTsGraph, Solve3) {
   }
 }
 
-TEST(NaviSpeedTsGraph, ErrorTest) {}*/
+TEST(NaviSpeedTsGraph, ErrorTest) {}
 
 }  // namespace planning
 }  // namespace apollo
