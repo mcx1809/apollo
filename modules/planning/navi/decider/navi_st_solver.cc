@@ -136,8 +136,8 @@ void Solver::UpdateConstraintForStation(double start_s, double end_s,
 }
 
 //
-#define TEST_P ((p.t > 39.0 && p.t < 41.0) && true)
-#define TEST_P1 ((cur.t > 39.0 && cur.t < 41.0) && true)
+#define TEST_P ((p.t > 49.0 && p.t < 51.0) && false)
+#define TEST_P1 ((cur.t > 49.0 && cur.t < 51.0) && false)
 Status Solver::Solve(
     double start_v, double start_a, double start_da,
     const std::function<VehicleCapability(double, double, double, double)>&
@@ -401,8 +401,61 @@ Status Solver::Solve(
       s_max -= ds;
       s_min += ds;
 
-      //
-      double step = 0.0;
+      // get cost func
+      auto get_cost = [&](double s) {
+        StPoint p;
+        p.t = cur.t;
+        p.s = s;
+
+        auto cur_cost = compute_cost(ppprev, pprev, prev, p, get_con(i, p),
+                                     true, true, true, true);
+        double next_cost = 0.0;
+        if (bidirection) {
+          if (i + 1 < len)
+            next_cost = compute_cost(pprev, prev, p, next, get_con(i + 1, next),
+                                     false, true, true, true);
+        }
+        return cur_cost + 0.5 * next_cost;
+      };
+
+      // to find the minimum cost
+      auto s = cur.s;
+      auto cost = get_cost(s);
+
+      // update cost func
+      auto update_cost = [&](double s0) {
+        if (s0 <= s_max && s0 >= s_min) {
+          auto cost0 = get_cost(s0);
+          if (cost0 < cost) {
+            cost = cost0;
+            s = s0;
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // optimize cost func
+      auto optimize_cost_direct = [&](int times, bool direct) {
+        constexpr double kStepMin = 1e-2;
+        auto step = kStepMin;
+        for (auto j = 0; j < times; ++j) {
+          auto s0 = s + (direct ? 1.0 : -1.0) * step;
+          if (update_cost(s0))
+            step *= 2.0;
+          else
+            break;
+        }
+      };
+
+      constexpr int kOptimizeDirectTimes = 8;
+      optimize_cost_direct(kOptimizeDirectTimes, true);
+      optimize_cost_direct(kOptimizeDirectTimes, false);
+      optimize_cost_direct(kOptimizeDirectTimes, true);
+      optimize_cost_direct(kOptimizeDirectTimes, false);
+
+      output[i].s = s;
+      return;
 
       // find the lowest cost
       struct {

@@ -44,8 +44,11 @@ using apollo::planning::navi_st_solver::OutputPoint;
 using apollo::planning::navi_st_solver::VehicleCapability;
 
 namespace {
-constexpr double kTsGraphSStep = 0.4;
-constexpr std::size_t kFallbackSpeedPointNum = 4;
+constexpr double kStSolverSStep = 0.4;
+constexpr int kFallbackSpeedPointNum = 10;
+constexpr double kStSolverTStep = 0.5;
+constexpr double kStSolverTMax = 20.0;
+constexpr int kStSolverIterNum = 500;
 constexpr double kSpeedPointSLimit = 200.0;
 constexpr double kSpeedPointTimeLimit = 50.0;
 }  // namespace
@@ -227,12 +230,12 @@ Status NaviSpeedDecider::MakeSpeedDecision(
                   "exceeding maximum allowable speed.");
   }
 
-  auto s_step = planning_length > kTsGraphSStep
-                    ? kTsGraphSStep
+  auto s_step = planning_length > kStSolverSStep
+                    ? kStSolverSStep
                     : planning_length / kFallbackSpeedPointNum;
 
   // init st_solver
-  st_solver_.Reset(s_step, planning_length, start_v, start_a, start_da);
+  st_solver_.Reset(s_step, planning_length, kStSolverTStep, kStSolverTMax);
 
   // add t-s constraints
   auto ret = AddPerceptionRangeConstraints();
@@ -261,8 +264,12 @@ Status NaviSpeedDecider::MakeSpeedDecision(
   }
 
   // create speed-points
-  std::vector<OutputPoint> st_points;
-  if (ts_graph_.Solve(&ts_points) != Status::OK()) {
+  std::vector<OutputPoint> output;
+  if (st_solver_.Solve(start_v, start_a, start_da,
+                       [](double t, double s, double v, double a) {
+                         return VehicleCapability();
+                       },
+                       kSpeedPointSLimit, 0, &output) != Status::OK()) {
     AERROR << "Solve speed points failed";
     speed_data->Clear();
     speed_data->AppendSpeedPoint(0.0 + start_s, 0.0, 0.0, -max_decel_, 0.0);
@@ -271,38 +278,9 @@ Status NaviSpeedDecider::MakeSpeedDecision(
   }
 
   speed_data->Clear();
-  for (auto& ts_point : ts_points) {
-    if (ts_point.s > kSpeedPointSLimit || ts_point.t > kSpeedPointTimeLimit)
-      break;
-
-    if (ts_point.v > hard_speed_limit_) {
-      AERROR << "The v: " << ts_point.v << " of point with s: " << ts_point.s
-             << " and t: " << ts_point.t << "is greater than hard_speed_limit "
-             << hard_speed_limit_;
-      ts_point.v = hard_speed_limit_;
-    }
-
-    if (std::abs(ts_point.v) < kZeroSpeedEpsilon) ts_point.v = 0.0;
-
-    if (ts_point.a > hard_accel_limit_) {
-      AERROR << "The a: " << ts_point.a << " of point with s: " << ts_point.s
-             << " and t: " << ts_point.t << "is greater than hard_accel_limit "
-             << hard_accel_limit_;
-      ts_point.a = hard_accel_limit_;
-    }
-
-    if (std::abs(ts_point.a) < kZeroAccelEpsilon) ts_point.a = 0.0;
-
-    // apply acceleration adjust
-    if (enable_accel_auto_compensation_) {
-      if (ts_point.a > 0)
-        ts_point.a *= accel_compensation_ratio_;
-      else
-        ts_point.a *= decel_compensation_ratio_;
-    }
-
-    speed_data->AppendSpeedPoint(ts_point.s + start_s, ts_point.t, ts_point.v,
-                                 ts_point.a, ts_point.da);
+  for (auto& p : output) {
+    if (p.s > kSpeedPointSLimit || p.t > kSpeedPointTimeLimit) break;
+    speed_data->AppendSpeedPoint(p.s + start_s, p.t, p.v, p.a, p.da);
   }
 
   const auto& speed_vector = speed_data->speed_vector();

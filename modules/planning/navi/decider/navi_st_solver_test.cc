@@ -31,7 +31,7 @@ using apollo::common::Status;
 
 TEST(Solver, StartFromZero) {
   Solver solver;
-  solver.Reset(1.0, 1000.0, 2.5, 100.0);
+  solver.Reset(1.0, 1000.0, 1.0, 50.0);
 
   Constraint con;
   // con.s_preffered = 5.0;
@@ -45,11 +45,11 @@ TEST(Solver, StartFromZero) {
 
   con.v_max = 10.0;
   con.v_preffered = 5.0;
-  solver.UpdateConstraintForStation(150.0, 260.0, con);
+  // solver.UpdateConstraintForStation(100.0, 200.0, con);
 
   con.v_max = 20.0;
-  con.v_preffered = 15.0;
-  solver.UpdateConstraintForTime(60.0, 100.0, con);
+  con.v_preffered = 10.0;
+  solver.UpdateConstraintForTime(20.0, 30.0, con);
 
   auto get_vehicle_capability = [](double t, double s, double v, double a) {
     auto cap = VehicleCapability();
