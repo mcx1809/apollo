@@ -39,16 +39,15 @@ using apollo::common::Status;
 using apollo::common::VehicleConfigHelper;
 using apollo::common::math::Clamp;
 using apollo::common::util::MakePathPoint;
+using apollo::planning::navi_st_solver::Constraint;
+using apollo::planning::navi_st_solver::OutputPoint;
+using apollo::planning::navi_st_solver::VehicleCapability;
 
 namespace {
 constexpr double kTsGraphSStep = 0.4;
-constexpr size_t kFallbackSpeedPointNum = 4;
+constexpr std::size_t kFallbackSpeedPointNum = 4;
 constexpr double kSpeedPointSLimit = 200.0;
 constexpr double kSpeedPointTimeLimit = 50.0;
-constexpr double kZeroSpeedEpsilon = 1.0e-3;
-constexpr double kZeroAccelEpsilon = 1.0e-3;
-constexpr double kDecelCompensationLimit = 2.0;
-constexpr double kKappaAdjustRatio = 20.0;
 }  // namespace
 
 NaviSpeedDecider::NaviSpeedDecider() : NaviTask("NaviSpeedDecider") {}
@@ -63,13 +62,15 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   CHECK(config.planner_navi_config()
             .navi_speed_decider_config()
             .has_preferred_decel());
+  CHECK(config.planner_navi_config()
+            .navi_speed_decider_config()
+            .has_preferred_jerk());
   CHECK(
       config.planner_navi_config().navi_speed_decider_config().has_max_accel());
   CHECK(
       config.planner_navi_config().navi_speed_decider_config().has_max_decel());
-  CHECK(config.planner_navi_config()
-            .navi_speed_decider_config()
-            .has_preferred_jerk());
+  CHECK(
+      config.planner_navi_config().navi_speed_decider_config().has_max_jerk());
   CHECK(config.planner_navi_config()
             .navi_speed_decider_config()
             .has_obstacle_buffer());
@@ -81,19 +82,10 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
             .has_safe_distance_ratio());
   CHECK(config.planner_navi_config()
             .navi_speed_decider_config()
-            .has_following_accel_ratio());
-  CHECK(config.planner_navi_config()
-            .navi_speed_decider_config()
             .has_soft_centric_accel_limit());
   CHECK(config.planner_navi_config()
             .navi_speed_decider_config()
             .has_hard_centric_accel_limit());
-  CHECK(config.planner_navi_config()
-            .navi_speed_decider_config()
-            .has_hard_speed_limit());
-  CHECK(config.planner_navi_config()
-            .navi_speed_decider_config()
-            .has_hard_accel_limit());
   CHECK(config.planner_navi_config()
             .navi_speed_decider_config()
             .has_enable_safe_path());
@@ -102,13 +94,7 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
             .has_enable_planning_start_point());
   CHECK(config.planner_navi_config()
             .navi_speed_decider_config()
-            .has_enable_accel_auto_compensation());
-  CHECK(config.planner_navi_config()
-            .navi_speed_decider_config()
             .has_kappa_preview());
-  CHECK(config.planner_navi_config()
-            .navi_speed_decider_config()
-            .has_kappa_threshold());
 
   max_speed_ = FLAGS_planning_upper_speed_limit;
   preferred_accel_ = std::abs(config.planner_navi_config()
@@ -124,9 +110,11 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
       config.planner_navi_config().navi_speed_decider_config().max_accel());
   max_decel_ = std::abs(
       config.planner_navi_config().navi_speed_decider_config().max_decel());
+  max_jerk_ = std::abs(
+      config.planner_navi_config().navi_speed_decider_config().max_jerk());
   preferred_accel_ = std::min(max_accel_, preferred_accel_);
   preferred_decel_ = std::min(max_decel_, preferred_accel_);
-
+  preferred_jerk_ = std::min(max_jerk_, preferred_jerk_);
   obstacle_buffer_ = std::abs(config.planner_navi_config()
                                   .navi_speed_decider_config()
                                   .obstacle_buffer());
@@ -136,9 +124,6 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
   safe_distance_ratio_ = std::abs(config.planner_navi_config()
                                       .navi_speed_decider_config()
                                       .safe_distance_ratio());
-  following_accel_ratio_ = std::abs(config.planner_navi_config()
-                                        .navi_speed_decider_config()
-                                        .following_accel_ratio());
   soft_centric_accel_limit_ = std::abs(config.planner_navi_config()
                                            .navi_speed_decider_config()
                                            .soft_centric_accel_limit());
@@ -147,28 +132,16 @@ bool NaviSpeedDecider::Init(const PlanningConfig& config) {
                                            .hard_centric_accel_limit());
   soft_centric_accel_limit_ =
       std::min(hard_centric_accel_limit_, soft_centric_accel_limit_);
-  hard_speed_limit_ = std::abs(config.planner_navi_config()
-                                   .navi_speed_decider_config()
-                                   .hard_speed_limit());
-  hard_accel_limit_ = std::abs(config.planner_navi_config()
-                                   .navi_speed_decider_config()
-                                   .hard_accel_limit());
   enable_safe_path_ = config.planner_navi_config()
                           .navi_speed_decider_config()
                           .enable_safe_path();
   enable_planning_start_point_ = config.planner_navi_config()
                                      .navi_speed_decider_config()
                                      .enable_planning_start_point();
-  enable_accel_auto_compensation_ = config.planner_navi_config()
-                                        .navi_speed_decider_config()
-                                        .enable_accel_auto_compensation();
   kappa_preview_ =
       config.planner_navi_config().navi_speed_decider_config().kappa_preview();
-  kappa_threshold_ = config.planner_navi_config()
-                         .navi_speed_decider_config()
-                         .kappa_threshold();
 
-  return obstacle_decider_.Init(config);
+  return true;
 }
 
 Status NaviSpeedDecider::Execute(Frame* frame,
@@ -204,27 +177,13 @@ Status NaviSpeedDecider::Execute(Frame* frame,
   double start_da;
 
   if (enable_planning_start_point_) {
-    start_v = std::max(0.0, expected_v);
+    start_v = expected_v;
     start_a = expected_a;
     start_da = 0.0;
   } else {
-    start_v = std::max(0.0, current_v);
+    start_v = current_v;
     start_a = current_a;
     start_da = 0.0;
-  }
-
-  // acceleration auto compensation
-  if (enable_accel_auto_compensation_) {
-    if (prev_v_ > 0.0 && current_v > 0.0 && prev_v_ > expected_v) {
-      auto raw_ratio = (prev_v_ - expected_v) / (prev_v_ - current_v);
-      raw_ratio = Clamp(raw_ratio, 0.0, kDecelCompensationLimit);
-      decel_compensation_ratio_ = (decel_compensation_ratio_ + raw_ratio) / 2.0;
-      decel_compensation_ratio_ =
-          Clamp(decel_compensation_ratio_, 1.0, kDecelCompensationLimit);
-      ADEBUG << "change decel_compensation_ratio: " << decel_compensation_ratio_
-             << " raw: " << raw_ratio;
-    }
-    prev_v_ = current_v;
   }
 
   // get the path
@@ -267,14 +226,13 @@ Status NaviSpeedDecider::MakeSpeedDecision(
     return Status(ErrorCode::PLANNING_ERROR,
                   "exceeding maximum allowable speed.");
   }
-  start_v = std::max(0.0, start_v);
 
   auto s_step = planning_length > kTsGraphSStep
                     ? kTsGraphSStep
                     : planning_length / kFallbackSpeedPointNum;
 
-  // init t-s graph
-  ts_graph_.Reset(s_step, planning_length, start_v, start_a, start_da);
+  // init st_solver
+  st_solver_.Reset(s_step, planning_length, start_v, start_a, start_da);
 
   // add t-s constraints
   auto ret = AddPerceptionRangeConstraints();
@@ -303,7 +261,7 @@ Status NaviSpeedDecider::MakeSpeedDecision(
   }
 
   // create speed-points
-  std::vector<NaviSpeedTsPoint> ts_points;
+  std::vector<OutputPoint> st_points;
   if (ts_graph_.Solve(&ts_points) != Status::OK()) {
     AERROR << "Solve speed points failed";
     speed_data->Clear();
@@ -366,7 +324,7 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
     const std::vector<PathPoint>& path_points,
     const std::vector<const Obstacle*>& obstacles,
     const std::function<const Obstacle*(const std::string&)>& find_obstacle) {
-  const auto& vehicle_config = VehicleConfigHelper::instance()->GetConfig();
+  /*const auto& vehicle_config = VehicleConfigHelper::instance()->GetConfig();
   auto front_edge_to_center =
       vehicle_config.vehicle_param().front_edge_to_center();
   auto get_obstacle_distance = [&](double d) -> double {
@@ -405,7 +363,7 @@ Status NaviSpeedDecider::AddObstaclesConstraints(
     ts_graph_.UpdateObstacleConstraints(obstacle_distance, safe_distance,
                                         following_accel_ratio_, 0.0,
                                         preferred_speed_);
-  }
+  }*/
 
   return Status::OK();
 }
@@ -417,94 +375,94 @@ Status AddTrafficDecisionConstraints() {
 
 Status NaviSpeedDecider::AddCentricAccelerationConstraints(
     const std::vector<PathPoint>& path_points) {
-  if (path_points.size() < 2) {
-    AERROR << "Too few path points";
-    return Status(ErrorCode::PLANNING_ERROR, "too few path points.");
-  }
+  /* if (path_points.size() < 2) {
+     AERROR << "Too few path points";
+     return Status(ErrorCode::PLANNING_ERROR, "too few path points.");
+   }
 
-  double max_kappa = 0.0;
-  double max_kappa_v = std::numeric_limits<double>::max();
-  double preffered_kappa_v = std::numeric_limits<double>::max();
-  double max_kappa_s = 0.0;
-  const auto bs = path_points[0].has_s() ? path_points[0].s() : 0.0;
+   double max_kappa = 0.0;
+   double max_kappa_v = std::numeric_limits<double>::max();
+   double preffered_kappa_v = std::numeric_limits<double>::max();
+   double max_kappa_s = 0.0;
+   const auto bs = path_points[0].has_s() ? path_points[0].s() : 0.0;
 
-  struct CLimit {
-    double s;
-    double v_max;
-    double v_preffered;
-  };
-  std::vector<CLimit> c_limits;
-  c_limits.resize(path_points.size() - 1);
+   struct CLimit {
+     double s;
+     double v_max;
+     double v_preffered;
+   };
+   std::vector<CLimit> c_limits;
+   c_limits.resize(path_points.size() - 1);
 
-  for (size_t i = 1; i < path_points.size(); i++) {
-    const auto& prev = path_points[i - 1];
-    const auto& cur = path_points[i];
-    auto start_s = prev.has_s() ? prev.s() - bs : 0.0;
-    start_s = std::max(0.0, start_s);
-    auto end_s = cur.has_s() ? cur.s() - bs : 0.0;
-    end_s = std::max(0.0, end_s);
-    auto start_k = prev.has_kappa() ? prev.kappa() : 0.0;
-    auto end_k = cur.has_kappa() ? cur.kappa() : 0.0;
-    auto kappa = std::abs((start_k + end_k) / 2.0);
-    if (std::abs(kappa) < kappa_threshold_) kappa /= kKappaAdjustRatio;
+   for (size_t i = 1; i < path_points.size(); i++) {
+     const auto& prev = path_points[i - 1];
+     const auto& cur = path_points[i];
+     auto start_s = prev.has_s() ? prev.s() - bs : 0.0;
+     start_s = std::max(0.0, start_s);
+     auto end_s = cur.has_s() ? cur.s() - bs : 0.0;
+     end_s = std::max(0.0, end_s);
+     auto start_k = prev.has_kappa() ? prev.kappa() : 0.0;
+     auto end_k = cur.has_kappa() ? cur.kappa() : 0.0;
+     auto kappa = std::abs((start_k + end_k) / 2.0);
+     if (std::abs(kappa) < kappa_threshold_) kappa /= kKappaAdjustRatio;
 
-    auto v_preffered = std::min(std::sqrt(soft_centric_accel_limit_ / kappa),
-                                std::numeric_limits<double>::max());
-    auto v_max = std::min(std::sqrt(hard_centric_accel_limit_ / kappa),
-                          std::numeric_limits<double>::max());
+     auto v_preffered = std::min(std::sqrt(soft_centric_accel_limit_ / kappa),
+                                 std::numeric_limits<double>::max());
+     auto v_max = std::min(std::sqrt(hard_centric_accel_limit_ / kappa),
+                           std::numeric_limits<double>::max());
 
-    c_limits[i - 1].s = end_s;
-    c_limits[i - 1].v_max = v_max;
-    c_limits[i - 1].v_preffered = v_preffered;
+     c_limits[i - 1].s = end_s;
+     c_limits[i - 1].v_max = v_max;
+     c_limits[i - 1].v_preffered = v_preffered;
 
-    if (kappa > max_kappa) {
-      max_kappa = kappa;
-      max_kappa_v = v_max;
-      preffered_kappa_v = v_preffered;
-      max_kappa_s = start_s;
-    }
-  }
+     if (kappa > max_kappa) {
+       max_kappa = kappa;
+       max_kappa_v = v_max;
+       preffered_kappa_v = v_preffered;
+       max_kappa_s = start_s;
+     }
+   }
 
-  // kappa preview
-  for (size_t i = 0; i < c_limits.size(); i++) {
-    for (size_t j = i; j - i < (size_t)(kappa_preview_ / kTsGraphSStep) &&
-                       j < c_limits.size();
-         j++)
-      c_limits[i].v_preffered =
-          std::min(c_limits[j].v_preffered, c_limits[i].v_preffered);
-  }
+   // kappa preview
+   for (size_t i = 0; i < c_limits.size(); i++) {
+     for (size_t j = i; j - i < (size_t)(kappa_preview_ / kTsGraphSStep) &&
+                        j < c_limits.size();
+          j++)
+       c_limits[i].v_preffered =
+           std::min(c_limits[j].v_preffered, c_limits[i].v_preffered);
+   }
 
-  double start_s = 0.0;
-  for (size_t i = 0; i < c_limits.size(); i++) {
-    auto end_s = c_limits[i].s;
-    auto v_max = c_limits[i].v_max;
-    auto v_preffered = c_limits[i].v_preffered;
+   double start_s = 0.0;
+   for (size_t i = 0; i < c_limits.size(); i++) {
+     auto end_s = c_limits[i].s;
+     auto v_max = c_limits[i].v_max;
+     auto v_preffered = c_limits[i].v_preffered;
 
-    NaviSpeedTsConstraints constraints;
-    constraints.v_max = v_max;
-    constraints.v_preffered = v_preffered;
-    ts_graph_.UpdateRangeConstraints(start_s, end_s, constraints);
+     Constraint con;
+     con.v_max = v_max;
+     con.v_preffered = v_preffered;
+     st_solver_.UpdateConstraintForStation(start_s, end_s, con);
 
-    start_s = end_s;
-  }
+     start_s = end_s;
+   }
 
-  AINFO << "add speed limit for centric acceleration with kappa: " << max_kappa
-        << " v_max: " << max_kappa_v << " v_preffered: " << preffered_kappa_v
-        << " s: " << max_kappa_s;
+   AINFO << "add speed limit for centric acceleration with kappa: " << max_kappa
+         << " v_max: " << max_kappa_v << " v_preffered: " << preffered_kappa_v
+         << " s: " << max_kappa_s;*/
 
   return Status::OK();
 }
 
 Status NaviSpeedDecider::AddConfiguredConstraints() {
-  NaviSpeedTsConstraints constraints;
-  constraints.v_max = max_speed_;
-  constraints.v_preffered = preferred_speed_;
-  constraints.a_max = max_accel_;
-  constraints.a_preffered = preferred_accel_;
-  constraints.b_max = max_decel_;
-  constraints.b_preffered = preferred_decel_;
-  constraints.da_preffered = preferred_jerk_;
-  ts_graph_.UpdateConstraints(constraints);
+  Constraint con;
+  con.v_max = max_speed_;
+  con.v_preffered = preferred_speed_;
+  con.a_max = max_accel_;
+  con.a_preffered = preferred_accel_;
+  con.b_max = max_decel_;
+  con.b_preffered = preferred_decel_;
+  con.da_preffered = preferred_jerk_;
+  st_solver_.UpdateConstraint(con);
 
   return Status::OK();
 }

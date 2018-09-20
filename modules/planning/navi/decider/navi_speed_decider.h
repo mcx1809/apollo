@@ -30,8 +30,7 @@
 
 #include "modules/common/status/status.h"
 #include "modules/planning/common/speed/speed_data.h"
-#include "modules/planning/navi/decider/navi_obstacle_decider.h"
-#include "modules/planning/navi/decider/navi_speed_ts_graph.h"
+#include "modules/planning/navi/decider/navi_st_solver.h"
 #include "modules/planning/navi/decider/navi_task.h"
 #include "modules/planning/proto/planning_config.pb.h"
 
@@ -133,32 +132,23 @@ class NaviSpeedDecider : public NaviTask {
 
  private:
   double preferred_speed_;
-  double max_speed_;
   double preferred_accel_;
   double preferred_decel_;
   double preferred_jerk_;
+  double max_speed_;
   double max_accel_;
   double max_decel_;
+  double max_jerk_;
   double obstacle_buffer_;
   double safe_distance_base_;
   double safe_distance_ratio_;
-  double following_accel_ratio_;
   double soft_centric_accel_limit_;
   double hard_centric_accel_limit_;
-  double hard_speed_limit_;
-  double hard_accel_limit_;
   bool enable_safe_path_;
   bool enable_planning_start_point_;
-  bool enable_accel_auto_compensation_;
   double kappa_preview_;
-  double kappa_threshold_;
 
-  NaviObstacleDecider obstacle_decider_;
-  NaviSpeedTsGraph ts_graph_;
-
-  double prev_v_ = 0.0;
-  double accel_compensation_ratio_ = 1.0;
-  double decel_compensation_ratio_ = 1.0;
+  navi_st_solver::Solver st_solver_;
 
   FRIEND_TEST(NaviSpeedDeciderTest, CreateSpeedData);
   FRIEND_TEST(NaviSpeedDeciderTest, CreateSpeedDataForStaticObstacle);

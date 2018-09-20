@@ -52,11 +52,11 @@ cc_library(
     name = "navi_speed_decider",
     srcs = [
         "navi_speed_decider.cc",
-        "navi_speed_ts_graph.cc",
+        "navi_st_solver.cc",
     ],
     hdrs = [
         "navi_speed_decider.h",
-        "navi_speed_ts_graph.h",
+        "navi_st_solver.h",
     ],
     deps = [
         ":navi_task",
@@ -107,7 +107,7 @@ cc_test(
         "navi_obstacle_decider_test.cc",
         "navi_path_decider_test.cc",
         "navi_speed_decider_test.cc",
-        "navi_speed_ts_graph_test.cc",
+        "navi_st_solver_test.cc",
     ],
     data = ["//modules/planning:planning_testdata"],
     deps = [
