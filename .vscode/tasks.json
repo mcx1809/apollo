@@ -100,7 +100,8 @@
             // change the "1111" to another port number.
             // Note: the module name and port number should be same as those in 
             // the "launch.json" file. 
-            "command": "bash docker/scripts/dev_start_gdb_server.sh planning 1111",            
+            //"command": "bash docker/scripts/dev_start_gdb_server.sh planning 1111",   
+            "command": "bash docker/scripts/dev_start_gdb_server.sh localization 2222",          
             "isBackground": true,
             "problemMatcher": {
                 "owner": "custom",

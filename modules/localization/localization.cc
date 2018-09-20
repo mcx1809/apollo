@@ -23,7 +23,7 @@
 #include "modules/localization/msf/msf_localization.h"
 #endif
 #include "modules/localization/rtk/rtk_localization.h"
-
+#include "modules/localization/cam/cam_localization.h"
 namespace apollo {
 namespace localization {
 
@@ -38,6 +38,10 @@ void Localization::RegisterLocalizationMethods() {
   localization_factory_.Register(
       LocalizationConfig::RTK,
       []() -> LocalizationBase* { return new RTKLocalization(); });
+
+  localization_factory_.Register(
+      LocalizationConfig::CAM,
+      []() -> LocalizationBase* { return new CAMLocalization(); });
 
 #ifdef __x86_64__
   localization_factory_.Register(
