@@ -14,7 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/cam/cam_localization.h"
+#include "modules/localization/lmd/lmd_localization.h"
 
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/math/quaternion.h"
@@ -31,34 +31,34 @@ using apollo::common::monitor::MonitorMessageItem;
 using apollo::common::time::Clock;
 using ::Eigen::Vector3d;
 
-CAMLocalization::CAMLocalization()
+LMDLocalization::LMDLocalization()
     : monitor_logger_(MonitorMessageItem::LOCALIZATION),
       map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z} {}
 
-CAMLocalization::~CAMLocalization() {}
+LMDLocalization::~LMDLocalization() {}
 
-Status CAMLocalization::Start() {
-  AdapterManager::Init(FLAGS_rtk_adapter_config_file);
+Status LMDLocalization::Start() {
+  AdapterManager::Init(FLAGS_lmd_adapter_config_file);
 
   // start ROS timer, one-shot = false, auto-start = true
   const double duration = 1.0 / FLAGS_localization_publish_freq;
   timer_ = AdapterManager::CreateTimer(ros::Duration(duration),
-                                       &CAMLocalization::OnTimer, this);
+                                       &LMDLocalization::OnTimer, this);
   common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
 
-  //Add initialization of raw input
+  // Add initialization of raw input
 
   tf2_broadcaster_.reset(new tf2_ros::TransformBroadcaster);
 
   return Status::OK();
 }
 
-Status CAMLocalization::Stop() {
+Status LMDLocalization::Stop() {
   timer_.stop();
   return Status::OK();
 }
 
-void CAMLocalization::OnTimer(const ros::TimerEvent &event) {
+void LMDLocalization::OnTimer(const ros::TimerEvent &event) {
   double time_delay =
       common::time::ToSecond(Clock::Now()) - last_received_timestamp_sec_;
   common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
@@ -68,7 +68,7 @@ void CAMLocalization::OnTimer(const ros::TimerEvent &event) {
     buffer.PrintLog();
   }
 
-  //Add msg_handler of raw input 
+  // Add msg_handler of raw input
 
   // publish localization messages
   PublishLocalization();
@@ -81,7 +81,7 @@ void CAMLocalization::OnTimer(const ros::TimerEvent &event) {
 }
 
 template <class T>
-T CAMLocalization::InterpolateXYZ(const T &p1, const T &p2,
+T LMDLocalization::InterpolateXYZ(const T &p1, const T &p2,
                                   const double frac1) {
   T p;
   double frac2 = 1.0 - frac1;
@@ -97,14 +97,12 @@ T CAMLocalization::InterpolateXYZ(const T &p1, const T &p2,
   return p;
 }
 
-void CAMLocalization::PrepareLocalizationMsg(
+void LMDLocalization::PrepareLocalizationMsg(
     LocalizationEstimate *localization) {
-      //Add code to implement LocalizationEstimate msg generation
+  // Add code to implement LocalizationEstimate msg generation
 }
 
-
-
-void CAMLocalization::PublishLocalization() {
+void LMDLocalization::PublishLocalization() {
   LocalizationEstimate localization;
   PrepareLocalizationMsg(&localization);
 
@@ -114,14 +112,14 @@ void CAMLocalization::PublishLocalization() {
   ADEBUG << "[OnTimer]: Localization message publish success!";
 }
 
-void CAMLocalization::RunWatchDog() {
+void LMDLocalization::RunWatchDog() {
   if (!FLAGS_enable_watchdog) {
     return;
   }
 
   common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
 
-  //Add code to implement watch dog
+  // Add code to implement watch dog
 }
 
 }  // namespace localization

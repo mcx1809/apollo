@@ -1,0 +1,52 @@
+load("//tools:cpplint.bzl", "cpplint")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "lmd_localization",
+    srcs = [
+        "lm_matcher.cc",
+        "lm_provider.cc",
+        "lmd_localization.cc",
+    ],
+    hdrs = [
+        "lm_matcher.h",
+        "lm_provider.h",
+        "lmd_localization.h",
+    ],
+    deps = [
+        "//modules/common",
+        "//modules/common/adapters:adapter_manager",
+        "//modules/common/monitor_log",
+        "//modules/common/proto:common_proto",
+        "//modules/common/status",
+        "//modules/common/time",
+        "//modules/localization:localization_base",
+        "//modules/localization/common:localization_common",
+        "//modules/localization/proto:localization_config_proto",
+        "//modules/localization/proto:localization_proto",
+        "//modules/localization/proto:odometry_lane_marker_proto",
+        "@gtest",
+        "@ros//:ros_common",
+    ],
+)
+
+cc_test(
+    name = "lmd_localization_test",
+    size = "small",
+    srcs = [
+        "lm_matcher_test.cc",
+        "lm_provider_test.cc",
+        "lmd_localization_test.cc",
+    ],
+    data = ["//modules/localization:localization_testdata"],
+    deps = [
+        "//modules/common:log",
+        "//modules/common/time",
+        "//modules/common/util",
+        "//modules/localization/lmd:lmd_localization",
+        "@gtest//:main",
+    ],
+)
+
+cpplint()

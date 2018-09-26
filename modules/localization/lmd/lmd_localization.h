@@ -15,12 +15,12 @@
  *****************************************************************************/
 
 /**
- * @file cam_localization.h
- * @brief The class of CAMLocalization
+ * @file lmd_localization.h
+ * @brief The class of LMDLocalization
  */
 
-#ifndef MODULES_LOCALIZATION_CAM_CAM_LOCALIZATION_H_
-#define MODULES_LOCALIZATION_CAM_CAM_LOCALIZATION_H_
+#ifndef MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
+#define MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
 
 #include <sstream>
 #include <string>
@@ -48,14 +48,14 @@ namespace apollo {
 namespace localization {
 
 /**
- * @class CAMLocalization
+ * @class LMDLocalization
  *
- * @brief generate localization info based on CAM
+ * @brief generate localization info based on LMD
  */
-class CAMLocalization : public LocalizationBase {
+class LMDLocalization : public LocalizationBase {
  public:
-  CAMLocalization();
-  virtual ~CAMLocalization();
+  LMDLocalization();
+  virtual ~LMDLocalization();
 
   /**
    * @brief module start function
@@ -90,4 +90,4 @@ class CAMLocalization : public LocalizationBase {
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_RTK_RTK_LOCALIZATION_H_
+#endif  // MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_

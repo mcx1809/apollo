@@ -1,1 +1,1 @@
-localization_type: CAM
+localization_type: MSF
