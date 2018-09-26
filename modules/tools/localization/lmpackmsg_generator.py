@@ -52,9 +52,16 @@ def write_info(source_tuple, filename):
 		left_c1_heading_angle          = source_tuple[0][obs_index].lane_marker.left_lane_marker.c1_heading_angle
 		left_c2_curvature              = source_tuple[0][obs_index].lane_marker.left_lane_marker.c2_curvature
 		left_c3_curvature_derivative   = source_tuple[0][obs_index].lane_marker.left_lane_marker.c3_curvature_derivative
+		#the endpoint shift 1m from start point in x direction 
+		left_endpoint_xshift           = 1  
+		#the endpoint shift left_endpoint_yshift from start point in y direction accordingly
+		left_endpoint_yshift           = left_c0_position + left_c1_heading_angle + left_c2_curvature + left_c3_curvature_derivative
 		left_lane_marker.start_position.x              = localization_former.x * proportion + localization_next.x * (1 - proportion) 
 		left_lane_marker.start_position.y              = localization_former.y * proportion + localization_next.y * (1 - proportion) + left_c0_position
 		left_lane_marker.start_position.z              = localization_former.z * proportion + localization_next.z * (1 - proportion)
+		left_lane_marker.end_position.x                = localization_former.x * proportion + localization_next.x * (1 - proportion) + left_endpoint_xshift
+		left_lane_marker.end_position.y                = localization_former.y * proportion + localization_next.y * (1 - proportion) + left_endpoint_yshift
+		left_lane_marker.end_position.z                = localization_former.z * proportion + localization_next.z * (1 - proportion)
 		left_lane_marker.c0_position                   = left_c0_position
 		left_lane_marker.c1_heading_angle              = left_c1_heading_angle
 		left_lane_marker.c2_curvature                  = left_c2_curvature
@@ -65,9 +72,16 @@ def write_info(source_tuple, filename):
 		right_c1_heading_angle         = source_tuple[0][obs_index].lane_marker.right_lane_marker.c1_heading_angle
 		right_c2_curvature             = source_tuple[0][obs_index].lane_marker.right_lane_marker.c2_curvature
 		right_c3_curvature_derivative  = source_tuple[0][obs_index].lane_marker.right_lane_marker.c3_curvature_derivative
+		#the endpoint shift 1m from start point in x direction 
+		right_endpoint_xshift          = 1
+		#the endpoint shift left_endpoint_yshift from start point in y direction accordingly
+		right_endpoint_yshift          = right_c0_position + right_c1_heading_angle + right_c2_curvature + right_c3_curvature_derivative		
 		right_lane_marker.start_position.x            = localization_former.x * proportion + localization_next.x * (1 - proportion) 
 		right_lane_marker.start_position.y            = localization_former.y * proportion + localization_next.y * (1 - proportion) + right_c0_position
 		right_lane_marker.start_position.z            = localization_former.z * proportion + localization_next.z * (1 - proportion)
+		right_lane_marker.end_position.x              = localization_former.x * proportion + localization_next.x * (1 - proportion) + right_endpoint_xshift
+		right_lane_marker.end_position.y              = localization_former.y * proportion + localization_next.y * (1 - proportion) + right_endpoint_yshift
+		right_lane_marker.end_position.z              = localization_former.z * proportion + localization_next.z * (1 - proportion)		
 		right_lane_marker.c0_position                 = right_c0_position
 		right_lane_marker.c1_heading_angle            = right_c1_heading_angle
 		right_lane_marker.c2_curvature                = right_c2_curvature
