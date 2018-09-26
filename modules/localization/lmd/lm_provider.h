@@ -16,7 +16,7 @@
 
 /**
  * @file lm_provider.h
- * @brief The class of LMProvider
+ * @brief The class of LMProvider.
  */
 
 #ifndef MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
@@ -35,28 +35,49 @@ namespace localization {
 /**
  * @class LMProvider
  *
- * @brief  provider of  odometry lane markers
+ * @brief  Provider of  odometry lane markers.
  */
 class LMProvider {
  public:
   /**
-   * @brief find the nearest lane marker  with position
-   * @return a lane marker or nullptr
+   * @brief Find the nearest lane marker  with specified position.
+   * @param position Specified position.
+   * @return A lane marker or nullptr.
    */
   const apollo::localization::OdometryLaneMarker* FindNearestLaneMarker(
       const apollo::common::PointENU& position) const;
 
   /**
-   * @brief get the prev lane marker
-   * @return a lane marker or nullptr
+   * @brief Get the prev lane marker.
+   * @param lane_marker Current lane marker.
+   * @return A lane marker or nullptr.
    */
-  const apollo::localization::OdometryLaneMarker* GetPrevLaneMarker() const;
+  const apollo::localization::OdometryLaneMarker* GetPrevLaneMarker(
+      const apollo::localization::OdometryLaneMarker& lane_marker) const;
 
   /**
-   * @brief get the next lane marker
-   * @return a lane marker or nullptr
+   * @brief Get the next lane marker.
+   * @param lane_marker Current lane marker.
+   * @rreturn A lane marker or nullptr.
    */
-  const apollo::localization::OdometryLaneMarker* GetNextLaneMarker() const;
+  const apollo::localization::OdometryLaneMarker* GetNextLaneMarker(
+      const apollo::localization::OdometryLaneMarker& lane_marker) const;
+
+  /**
+   * @brief Get the left lane marker.
+   * @param lane_marker Current lane marker.
+   * @return A lane marker or nullptr.
+   */
+  const apollo::localization::OdometryLaneMarker* GetLeftLaneMarker(
+      const apollo::localization::OdometryLaneMarker& lane_marker) const;
+
+  /**
+   * @brief Get the right lane marker.
+   * @param lane_marker Current lane marker.
+   * @return A lane marker or nullptr.
+   */
+  const apollo::localization::OdometryLaneMarker* GetRightLaneMarker(
+      const apollo::localization::OdometryLaneMarker& lane_marker) const;
 };
 
 }  // namespace localization

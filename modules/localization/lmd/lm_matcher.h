@@ -16,7 +16,7 @@
 
 /**
  * @file lm_matcher.h
- * @brief The class of LMMatcher
+ * @brief The class of LMMatcher.
  */
 
 #ifndef MODULES_LOCALIZATION_LMD_LM_MATCHER_H_
@@ -39,15 +39,18 @@ namespace localization {
 /**
  * @class LMMatcher
  *
- * @brief  find the matched lane markers
+ * @brief  Find the matched lane markers.
  */
 class LMMatcher {
  public:
   explicit LMMatcher(LMProvider* provider);
 
   /**
-   * @brief  find the matched lane markers
-   * @return matched odometry lane markers
+   * @brief  Find the matched lane markers.
+   * @param position_estimated The estimated position.
+   * @param lane_markers Lane markers from perception.
+   * @param timestamp Timestamp for position_estimated and lane_markers.
+   * @return The matched odometry lane markers.
    */
   std::vector<OdometryLaneMarker> MatchLaneMarkers(
       const apollo::common::PointENU& position_estimated,

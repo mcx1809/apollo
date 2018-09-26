@@ -16,7 +16,7 @@
 
 /**
  * @file lmd_localization.h
- * @brief The class of LMDLocalization
+ * @brief The class of LMDLocalization.
  */
 
 #ifndef MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
@@ -50,7 +50,7 @@ namespace localization {
 /**
  * @class LMDLocalization
  *
- * @brief generate localization info based on LMD
+ * @brief Generate localization info based on LMD.
  */
 class LMDLocalization : public LocalizationBase {
  public:
@@ -58,14 +58,14 @@ class LMDLocalization : public LocalizationBase {
   virtual ~LMDLocalization();
 
   /**
-   * @brief module start function
-   * @return start status
+   * @brief Module start function.
+   * @return Start status.
    */
   apollo::common::Status Start() override;
 
   /**
-   * @brief module stop function
-   * @return stop status
+   * @brief Module stop function.
+   * @return Stop status.
    */
   apollo::common::Status Stop() override;
 
