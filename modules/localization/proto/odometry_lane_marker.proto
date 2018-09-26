@@ -48,3 +48,10 @@ message OdometryLaneMarker {
   // Timestamp
   optional double timestamp = 11;
 }
+
+message OdometryLaneMarkers {
+  optional OdometryLaneMarker left_lane_marker = 1;
+  optional OdometryLaneMarker right_lane_marker = 2;
+  repeated OdometryLaneMarker next_left_lane_marker = 3;
+  repeated OdometryLaneMarker next_right_lane_marker = 4;
+}
