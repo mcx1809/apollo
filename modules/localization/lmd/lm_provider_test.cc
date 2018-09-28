@@ -65,6 +65,7 @@ TEST(LMProviderTest, GetNextLaneMarkerIndex) {
   EXPECT_EQ(next_index.second, nearest_index.second + 1);
   EXPECT_EQ(1, next_index.first);
   EXPECT_EQ(1760, next_index.second);
+  delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
@@ -81,6 +82,7 @@ TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
   EXPECT_EQ(left_index.second, nearest_index.second);
   EXPECT_EQ(0, left_index.first);
   EXPECT_EQ(1759, left_index.second);
+  delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetRightLaneMarkerIndex) {
@@ -101,6 +103,7 @@ TEST(LMProviderTest, GetRightLaneMarkerIndex) {
   EXPECT_EQ(1759, index.second);
   EXPECT_EQ(1, right_index.first);
   EXPECT_EQ(1759, right_index.second);
+  delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetLaneMarker) {
@@ -116,6 +119,7 @@ TEST(LMProviderTest, GetLaneMarker) {
   EXPECT_TRUE(lane_marker.has_start_position());
   EXPECT_TRUE(lane_marker.has_end_position());
   EXPECT_DOUBLE_EQ(1, lane_marker.z_length());
+  delete lm_provider_;
 }
 }  // namespace localization
 }  // namespace apollo
