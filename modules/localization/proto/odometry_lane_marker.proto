@@ -45,9 +45,6 @@ message OdometryLaneMarker {
 
   // Relative position of end point
   optional apollo.common.Point3D rel_end_position = 11;
-
-  // Timestamp
-  optional double timestamp = 12;
 }
 
 message ContourOdometryLaneMarkers {
