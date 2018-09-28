@@ -22,9 +22,11 @@
 #ifndef MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
 #define MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
 
+#include <utility>
 #include "modules/common/proto/geometry.pb.h"
+#include "modules/common/util/file.h"
+#include "modules/localization/common/localization_gflags.h"
 #include "modules/localization/proto/odometry_lane_marker.pb.h"
-
 /**
  * @namespace apollo::localization
  * @brief apollo::localization
@@ -39,45 +41,58 @@ namespace localization {
  */
 class LMProvider {
  public:
+  LMProvider();
+  virtual ~LMProvider();
   /**
-   * @brief Find the nearest lane marker  with specified position.
+   * @brief Find the nearest lane marker index with specified position.
    * @param position Specified position.
-   * @return A lane marker or nullptr.
    */
-  const apollo::localization::OdometryLaneMarker* FindNearestLaneMarker(
-      const apollo::common::PointENU& position) const;
+  void FindNearestLaneMarkerIndex(const apollo::common::PointENU& position);
 
   /**
-   * @brief Get the prev lane marker.
-   * @param lane_marker Current lane marker.
-   * @return A lane marker or nullptr.
+   * @brief Get the index of prev lane marker.
    */
-  const apollo::localization::OdometryLaneMarker* GetPrevLaneMarker(
-      const apollo::localization::OdometryLaneMarker& lane_marker) const;
+  void GetPrevLaneMarkerIndex();
 
   /**
-   * @brief Get the next lane marker.
-   * @param lane_marker Current lane marker.
-   * @rreturn A lane marker or nullptr.
+   * @brief Get the index of next lane marker.
    */
-  const apollo::localization::OdometryLaneMarker* GetNextLaneMarker(
-      const apollo::localization::OdometryLaneMarker& lane_marker) const;
+  void GetNextLaneMarkerIndex();
 
   /**
-   * @brief Get the left lane marker.
-   * @param lane_marker Current lane marker.
-   * @return A lane marker or nullptr.
+   * @brief Get the index of left lane marker.
    */
-  const apollo::localization::OdometryLaneMarker* GetLeftLaneMarker(
-      const apollo::localization::OdometryLaneMarker& lane_marker) const;
+  void GetLeftLaneMarkerIndex();
 
   /**
-   * @brief Get the right lane marker.
-   * @param lane_marker Current lane marker.
+   * @brief Get the index of right lane marker.
+   */
+  void GetRightLaneMarkerIndex();
+
+  /**
+   * @brief Get the index of current lane marker.
+   */
+  const std::pair<int, int>& GetCurrentLaneMarkerIndex() const;
+  /**
+   * @brief Get lane marker according to index pair.
    * @return A lane marker or nullptr.
    */
-  const apollo::localization::OdometryLaneMarker* GetRightLaneMarker(
-      const apollo::localization::OdometryLaneMarker& lane_marker) const;
+  const apollo::localization::OdometryLaneMarker& GetLaneMarker() const;
+
+ private:
+  apollo::localization::OdometryLaneMarkersPack LaneMarkersPack_;
+  std::pair<int, int> lane_index;
+  /**
+   * @brief Calclute the distance from point position to the line of start_pos
+   * and end_pos.
+   * @param position the point
+   * @param start_pos the location of start point of the line
+   * @param end_pos   the location of end point of the line
+   * @return the distance value
+   */
+  double CalculateDistance(const apollo::common::PointENU& position,
+                           const apollo::common::PointENU& start_pos,
+                           const apollo::common::PointENU& end_pos) const;
 };
 
 }  // namespace localization
