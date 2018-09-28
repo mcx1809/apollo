@@ -24,65 +24,17 @@
 namespace apollo {
 namespace localization {
 
+using apollo::common::Point3D;
+using apollo::common::PointENU;
 using apollo::common::Status;
 using apollo::common::adapter::AdapterManager;
 using apollo::common::adapter::ImuAdapter;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::common::time::Clock;
-using ::Eigen::Vector3d;
-
-LMDLocalization::LMDLocalization()
-    : monitor_logger_(MonitorMessageItem::LOCALIZATION),
-      map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z} {}
-
-LMDLocalization::~LMDLocalization() {}
-
-Status LMDLocalization::Start() {
-  AdapterManager::Init(FLAGS_lmd_adapter_config_file);
-
-  // start ROS timer, one-shot = false, auto-start = true
-  const double duration = 1.0 / FLAGS_localization_publish_freq;
-  timer_ = AdapterManager::CreateTimer(ros::Duration(duration),
-                                       &LMDLocalization::OnTimer, this);
-  common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
-
-  // Add initialization of raw input
-
-  tf2_broadcaster_.reset(new tf2_ros::TransformBroadcaster);
-
-  return Status::OK();
-}
-
-Status LMDLocalization::Stop() {
-  timer_.stop();
-  return Status::OK();
-}
-
-void LMDLocalization::OnTimer(const ros::TimerEvent &event) {
-  double time_delay =
-      common::time::ToSecond(Clock::Now()) - last_received_timestamp_sec_;
-  common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
-  if (FLAGS_enable_gps_timestamp &&
-      time_delay > FLAGS_gps_time_delay_tolerance) {
-    buffer.ERROR() << "GPS message time delay: " << time_delay;
-    buffer.PrintLog();
-  }
-
-  // Add msg_handler of raw input
-
-  // publish localization messages
-  PublishLocalization();
-  service_started_ = true;
-
-  // watch dog
-  RunWatchDog();
-
-  last_received_timestamp_sec_ = common::time::ToSecond(Clock::Now());
-}
+using apollo::perception::PerceptionObstacles;
 
 template <class T>
-T LMDLocalization::InterpolateXYZ(const T &p1, const T &p2,
-                                  const double frac1) {
+static T InterpolateXYZ(const T &p1, const T &p2, const double frac1) {
   T p;
   double frac2 = 1.0 - frac1;
   if (p1.has_x() && !std::isnan(p1.x()) && p2.has_x() && !std::isnan(p2.x())) {
@@ -97,12 +49,237 @@ T LMDLocalization::InterpolateXYZ(const T &p1, const T &p2,
   return p;
 }
 
-void LMDLocalization::PrepareLocalizationMsg(
-    LocalizationEstimate *localization) {
-  // Add code to implement LocalizationEstimate msg generation
+static bool InterpolateIMU(const CorrectedImu &imu1, const CorrectedImu &imu2,
+                           const double timestamp_sec, CorrectedImu *imu_msg) {
+  if (!(imu1.has_header() && imu1.header().has_timestamp_sec() &&
+        imu2.has_header() && imu2.header().has_timestamp_sec())) {
+    AERROR << "imu1 and imu2 has no header or no timestamp_sec in header";
+    return false;
+  }
+  if (timestamp_sec - imu1.header().timestamp_sec() <
+      FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateIMU]: the given time stamp[" << timestamp_sec
+           << "] is older than the 1st message["
+           << imu1.header().timestamp_sec() << "]";
+    *imu_msg = imu1;
+  } else if (timestamp_sec - imu2.header().timestamp_sec() >
+             FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateIMU]: the given time stamp[" << timestamp_sec
+           << "] is newer than the 2nd message["
+           << imu2.header().timestamp_sec() << "]";
+    *imu_msg = imu1;
+  } else {
+    *imu_msg = imu1;
+    imu_msg->mutable_header()->set_timestamp_sec(timestamp_sec);
+
+    double time_diff =
+        imu2.header().timestamp_sec() - imu1.header().timestamp_sec();
+    if (fabs(time_diff) >= 0.001) {
+      double frac1 =
+          (timestamp_sec - imu1.header().timestamp_sec()) / time_diff;
+
+      if (imu1.has_imu() && imu1.imu().has_angular_velocity() &&
+          imu2.has_imu() && imu2.imu().has_angular_velocity()) {
+        auto val = InterpolateXYZ(imu1.imu().angular_velocity(),
+                                  imu2.imu().angular_velocity(), frac1);
+        imu_msg->mutable_imu()->mutable_angular_velocity()->CopyFrom(val);
+      }
+
+      if (imu1.has_imu() && imu1.imu().has_linear_acceleration() &&
+          imu2.has_imu() && imu2.imu().has_linear_acceleration()) {
+        auto val = InterpolateXYZ(imu1.imu().linear_acceleration(),
+                                  imu2.imu().linear_acceleration(), frac1);
+        imu_msg->mutable_imu()->mutable_linear_acceleration()->CopyFrom(val);
+      }
+
+      if (imu1.has_imu() && imu1.imu().has_euler_angles() && imu2.has_imu() &&
+          imu2.imu().has_euler_angles()) {
+        auto val = InterpolateXYZ(imu1.imu().euler_angles(),
+                                  imu2.imu().euler_angles(), frac1);
+        imu_msg->mutable_imu()->mutable_euler_angles()->CopyFrom(val);
+      }
+    }
+  }
+  return true;
 }
 
-void LMDLocalization::PublishLocalization() {
+static void FillPoseFromImu(const Pose &imu, Pose *pose) {
+  // linear acceleration
+  if (imu.has_linear_acceleration()) {
+    if (FLAGS_enable_map_reference_unify) {
+      if (pose->has_orientation()) {
+        // linear_acceleration:
+        // convert from vehicle reference to map reference
+        Eigen::Vector3d orig(imu.linear_acceleration().x(),
+                             imu.linear_acceleration().y(),
+                             imu.linear_acceleration().z());
+        auto vec = common::math::QuaternionRotate(pose->orientation(), orig);
+        pose->mutable_linear_acceleration()->set_x(vec[0]);
+        pose->mutable_linear_acceleration()->set_y(vec[1]);
+        pose->mutable_linear_acceleration()->set_z(vec[2]);
+
+        // linear_acceleration_vfr
+        pose->mutable_linear_acceleration_vrf()->CopyFrom(
+            imu.linear_acceleration());
+      } else {
+        AERROR << "[PrepareLocalizationMsg]: "
+               << "fail to convert linear_acceleration";
+      }
+    } else {
+      pose->mutable_linear_acceleration()->CopyFrom(imu.linear_acceleration());
+    }
+  }
+
+  // angular velocity
+  if (imu.has_angular_velocity()) {
+    if (FLAGS_enable_map_reference_unify) {
+      if (pose->has_orientation()) {
+        // angular_velocity:
+        // convert from vehicle reference to map reference
+        Eigen::Vector3d orig(imu.angular_velocity().x(),
+                             imu.angular_velocity().y(),
+                             imu.angular_velocity().z());
+        auto vec = common::math::QuaternionRotate(pose->orientation(), orig);
+        pose->mutable_angular_velocity()->set_x(vec[0]);
+        pose->mutable_angular_velocity()->set_y(vec[1]);
+        pose->mutable_angular_velocity()->set_z(vec[2]);
+
+        // angular_velocity_vf
+        pose->mutable_angular_velocity_vrf()->CopyFrom(imu.angular_velocity());
+      } else {
+        AERROR << "[PrepareLocalizationMsg]: "
+               << "fail to convert angular_velocity";
+      }
+    } else {
+      pose->mutable_angular_velocity()->CopyFrom(imu.angular_velocity());
+    }
+  }
+
+  // euler angle
+  if (imu.has_euler_angles())
+    pose->mutable_euler_angles()->CopyFrom(imu.euler_angles());
+}
+
+LMDLocalization::LMDLocalization()
+    : monitor_logger_(MonitorMessageItem::LOCALIZATION),
+      map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z},
+      lm_matcher_(&lm_provider_) {}
+
+LMDLocalization::~LMDLocalization() {}
+
+Status LMDLocalization::Start() {
+  AdapterManager::Init(FLAGS_lmd_adapter_config_file);
+
+  // Perception Obstacles
+  AdapterManager::AddPerceptionObstaclesCallback(
+      &LMDLocalization::OnPerceptionObstacles, this);
+
+  // start ROS timer, one-shot = false, auto-start = true
+  const double duration = 1.0 / FLAGS_localization_publish_freq;
+  timer_ = AdapterManager::CreateTimer(ros::Duration(duration),
+                                       &LMDLocalization::OnTimer, this);
+
+  tf2_broadcaster_.reset(new tf2_ros::TransformBroadcaster);
+
+  return Status::OK();
+}
+
+Status LMDLocalization::Stop() {
+  timer_.stop();
+  return Status::OK();
+}
+
+void LMDLocalization::OnGps(const localization::Gps &gps) {
+  if (!gps.has_header() || !gps.header().has_timestamp_sec() ||
+      !gps.has_localization() || !gps.localization().has_position()) {
+    AERROR << "gps has no header or no some fields";
+    return;
+  }
+
+  auto timestamp = gps.header().timestamp_sec();
+  const auto &pose = gps.localization();
+  if (!has_last_pose_ || last_pose_timestamp_sec_ < timestamp) {
+    if (!has_last_pose_) AINFO << "initialize pose";
+
+    Pose new_pose;
+
+    // position
+    // world frame -> map frame
+    new_pose.mutable_position()->set_x(pose.position().x() - map_offset_[0]);
+    new_pose.mutable_position()->set_y(pose.position().y() - map_offset_[1]);
+    new_pose.mutable_position()->set_z(pose.position().z() - map_offset_[2]);
+
+    // orientation
+    if (pose.has_orientation()) {
+      new_pose.mutable_orientation()->CopyFrom(pose.orientation());
+      auto heading = common::math::QuaternionToHeading(
+          pose.orientation().qw(), pose.orientation().qx(),
+          pose.orientation().qy(), pose.orientation().qz());
+      new_pose.set_heading(heading);
+    }
+
+    // linear velocity
+    if (pose.has_linear_velocity())
+      new_pose.mutable_linear_velocity()->CopyFrom(pose.linear_velocity());
+
+    // IMU
+    CorrectedImu imu_msg;
+    if (!FindMatchingIMU(timestamp, &imu_msg)) return;
+    CHECK(imu_msg.has_imu());
+    const auto &imu = imu_msg.imu();
+    FillPoseFromImu(imu, &new_pose);
+
+    has_last_pose_ = true;
+    last_pose_.CopyFrom(new_pose);
+    last_pose_timestamp_sec_ = timestamp;
+  }
+}
+
+void LMDLocalization::OnPerceptionObstacles(
+    const PerceptionObstacles &obstacles) {
+  if (has_last_pose_ && obstacles.has_lane_marker()) {
+    if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec()) {
+      AERROR << "obstacles has no header or no some fields";
+      return;
+    }
+
+    auto timestamp = obstacles.header().timestamp_sec();
+    if (last_pose_timestamp_sec_ > timestamp) return;
+
+    // TODO(all):
+    const auto &position_estimated = last_pose_.position();
+
+    const auto &lane_markers = obstacles.lane_marker();
+    auto odometry_lane_markers = lm_matcher_.MatchLaneMarkers(
+        position_estimated, lane_markers, timestamp);
+
+    if (odometry_lane_markers.size()) {
+      for (const auto &olm : odometry_lane_markers) {
+      }
+    }
+
+    Pose new_pose;
+
+    // IMU
+    CorrectedImu imu_msg;
+    if (!FindMatchingIMU(timestamp, &imu_msg)) return;
+    CHECK(imu_msg.has_imu());
+    const auto &imu = imu_msg.imu();
+    FillPoseFromImu(imu, &new_pose);
+
+    has_last_pose_ = true;
+    last_pose_.CopyFrom(new_pose);
+    last_pose_timestamp_sec_ = timestamp;
+  }
+}
+
+void LMDLocalization::OnTimer(const ros::TimerEvent &event) {
+  if (!has_last_pose_) return;
+
+  // take a snapshot of the current received messages
+  AdapterManager::Observe();
+
+  //  Prepare localization message.
   LocalizationEstimate localization;
   PrepareLocalizationMsg(&localization);
 
@@ -110,14 +287,87 @@ void LMDLocalization::PublishLocalization() {
   AdapterManager::PublishLocalization(localization);
   PublishPoseBroadcastTF(localization);
   ADEBUG << "[OnTimer]: Localization message publish success!";
+
+  // watch dog
+  RunWatchDog();
+}
+
+void LMDLocalization::PrepareLocalizationMsg(
+    LocalizationEstimate *localization) {
+  localization->Clear();
+
+  // header
+  AdapterManager::FillLocalizationHeader(FLAGS_localization_module_name,
+                                         localization);
+
+  // TODO(all):
+
+  // measurement_time
+  localization->set_measurement_time(last_pose_timestamp_sec_);
+
+  // pose
+  localization->mutable_pose()->CopyFrom(last_pose_);
+}
+
+bool LMDLocalization::FindMatchingIMU(const double timestamp_sec,
+                                      CorrectedImu *imu_msg) {
+  auto *imu_adapter = AdapterManager::GetImu();
+  if (imu_adapter->Empty()) {
+    AERROR << "Cannot find Matching IMU. "
+           << "IMU message Queue is empty! timestamp[" << timestamp_sec << "]";
+    return false;
+  }
+
+  // scan imu buffer, find first imu message that is newer than the given
+  // timestamp
+  ImuAdapter::Iterator imu_it = imu_adapter->begin();
+  for (; imu_it != imu_adapter->end(); ++imu_it) {
+    if ((*imu_it)->header().timestamp_sec() - timestamp_sec >
+        FLAGS_timestamp_sec_tolerance) {
+      break;
+    }
+  }
+
+  if (imu_it != imu_adapter->end()) {  // found one
+    if (imu_it == imu_adapter->begin()) {
+      AERROR << "IMU queue too short or request too old. "
+             << "Oldest timestamp["
+             << imu_adapter->GetOldestObserved().header().timestamp_sec()
+             << "], Newest timestamp["
+             << imu_adapter->GetLatestObserved().header().timestamp_sec()
+             << "], timestamp[" << timestamp_sec << "]";
+      *imu_msg = imu_adapter->GetOldestObserved();  // the oldest imu
+    } else {
+      // here is the normal case
+      auto imu_it_1 = imu_it;
+      imu_it_1--;
+      if (!(*imu_it)->has_header() || !(*imu_it_1)->has_header()) {
+        AERROR << "imu1 and imu_it_1 must both have header.";
+        return false;
+      }
+      if (!InterpolateIMU(**imu_it_1, **imu_it, timestamp_sec, imu_msg)) {
+        AERROR << "failed to interpolate IMU";
+        return false;
+      }
+    }
+  } else {
+    // give the newest imu, without extrapolation
+    *imu_msg = imu_adapter->GetLatestObserved();
+    if (imu_msg == nullptr) {
+      AERROR << "Fail to get latest observed imu_msg.";
+      return false;
+    }
+
+    if (!imu_msg->has_header()) {
+      AERROR << "imu_msg must have header.";
+      return false;
+    }
+  }
+  return true;
 }
 
 void LMDLocalization::RunWatchDog() {
-  if (!FLAGS_enable_watchdog) {
-    return;
-  }
-
-  common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
+  if (!FLAGS_enable_watchdog) return;
 
   // Add code to implement watch dog
 }

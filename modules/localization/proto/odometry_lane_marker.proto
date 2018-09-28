@@ -32,21 +32,22 @@ message OdometryLaneMarker {
   optional double c1_heading_angle = 4;
   optional double c2_curvature = 5;
   optional double c3_curvature_derivative = 6;
+  optional double z_length = 7;
 
   // Position of start point
-  optional apollo.common.PointENU start_position = 7;
+  optional apollo.common.PointENU start_position = 8;
 
   // Position of end point
-  optional apollo.common.PointENU end_position = 8;
+  optional apollo.common.PointENU end_position = 9;
 
   // Relative position of start point
-  optional apollo.common.Point3D rel_start_position = 9;
+  optional apollo.common.Point3D rel_start_position = 10;
 
   // Relative position of end point
-  optional apollo.common.Point3D rel_end_position = 10;
+  optional apollo.common.Point3D rel_end_position = 11;
 
   // Timestamp
-  optional double timestamp = 11;
+  optional double timestamp = 12;
 }
 
 message ContourOdometryLaneMarkers {

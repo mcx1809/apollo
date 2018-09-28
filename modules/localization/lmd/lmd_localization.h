@@ -38,6 +38,8 @@
 
 #include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/status/status.h"
+#include "modules/localization/lmd/lm_matcher.h"
+#include "modules/localization/lmd/lm_provider.h"
 #include "modules/localization/localization_base.h"
 
 /**
@@ -70,21 +72,23 @@ class LMDLocalization : public LocalizationBase {
   apollo::common::Status Stop() override;
 
  private:
+  void OnGps(const localization::Gps &gps);
+  void OnPerceptionObstacles(
+      const apollo::perception::PerceptionObstacles &obstacles);
   void OnTimer(const ros::TimerEvent &event);
-  void PublishLocalization();
   void PrepareLocalizationMsg(LocalizationEstimate *localization);
+  bool FindMatchingIMU(const double timestamp_sec, CorrectedImu *imu_msg);
   void RunWatchDog();
-
-  template <class T>
-  T InterpolateXYZ(const T &p1, const T &p2, const double frac1);
 
  private:
   ros::Timer timer_;
   apollo::common::monitor::MonitorLogger monitor_logger_;
   const std::vector<double> map_offset_;
-  double last_received_timestamp_sec_ = 0.0;
-  double last_reported_timestamp_sec_ = 0.0;
-  bool service_started_ = false;
+  LMProvider lm_provider_;
+  LMMatcher lm_matcher_;
+  bool has_last_pose_ = false;
+  apollo::localization::Pose last_pose_;
+  double last_pose_timestamp_sec_;
 };
 
 }  // namespace localization
