@@ -21,24 +21,16 @@ namespace localization {
 
 class LMProviderTest : public ::testing::Test {};
 
-TEST(LMProviderTest, GetCurrentLaneMarkerIndex) {
-  auto lm_provider_ = new LMProvider();
-  std::pair<int, int> result = lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_EQ(std::numeric_limits<int>::max(), result.first);
-  EXPECT_EQ(std::numeric_limits<int>::max(), result.second);
-  delete lm_provider_;
-}
-
 TEST(LMProviderTest, FindNearestLaneMarkerIndex) {
   apollo::common::PointENU position;
   position.set_x(6882291.98649);
   position.set_y(3111354.33775);
   position.set_z(65.44452);
-  auto lm_provider_ = new LMProvider();
-  lm_provider_->FindNearestLaneMarkerIndex(position);
-  std::pair<int, int> result = lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_NE(std::numeric_limits<int>::max(), result.first);
-  EXPECT_NE(std::numeric_limits<int>::max(), result.second);
+  LMProvider* lm_provider_ = new LMProvider();
+  const std::pair<int, int>& result_index =
+      lm_provider_->FindNearestLaneMarkerIndex(position);
+  EXPECT_EQ(1, result_index.first);
+  EXPECT_EQ(1759, result_index.second);
   delete lm_provider_;
 }
 
@@ -47,15 +39,15 @@ TEST(LMProviderTest, GetPrevLaneMarkerIndex) {
   position.set_x(6882291.98649);
   position.set_y(3111354.33775);
   position.set_z(65.44452);
-  auto lm_provider_ = new LMProvider();
-  lm_provider_->FindNearestLaneMarkerIndex(position);
-  std::pair<int, int> before_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  lm_provider_->GetPrevLaneMarkerIndex();
-  std::pair<int, int> after_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_EQ(after_action_index.first, before_action_index.first);
-  EXPECT_EQ(after_action_index.second, before_action_index.second - 1);
+  LMProvider* lm_provider_ = new LMProvider();
+  const std::pair<int, int> nearest_index =
+      lm_provider_->FindNearestLaneMarkerIndex(position);
+  const std::pair<int, int> prev_index =
+      lm_provider_->GetPrevLaneMarkerIndex(nearest_index);
+  EXPECT_EQ(prev_index.first, nearest_index.first);
+  EXPECT_EQ(prev_index.second, nearest_index.second - 1);
+  EXPECT_EQ(1, prev_index.first);
+  EXPECT_EQ(1758, prev_index.second);
   delete lm_provider_;
 }
 
@@ -64,15 +56,15 @@ TEST(LMProviderTest, GetNextLaneMarkerIndex) {
   position.set_x(6882291.98649);
   position.set_y(3111354.33775);
   position.set_z(65.44452);
-  auto lm_provider_ = new LMProvider();
-  lm_provider_->FindNearestLaneMarkerIndex(position);
-  std::pair<int, int> before_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  lm_provider_->GetNextLaneMarkerIndex();
-  std::pair<int, int> after_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_EQ(after_action_index.first, before_action_index.first);
-  EXPECT_EQ(after_action_index.second, before_action_index.second + 1);
+  LMProvider* lm_provider_ = new LMProvider();
+  const std::pair<int, int> nearest_index =
+      lm_provider_->FindNearestLaneMarkerIndex(position);
+  const std::pair<int, int> next_index =
+      lm_provider_->GetNextLaneMarkerIndex(nearest_index);
+  EXPECT_EQ(next_index.first, nearest_index.first);
+  EXPECT_EQ(next_index.second, nearest_index.second + 1);
+  EXPECT_EQ(1, next_index.first);
+  EXPECT_EQ(1760, next_index.second);
 }
 
 TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
@@ -80,15 +72,15 @@ TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
   position.set_x(6882291.98649);
   position.set_y(3111354.33775);
   position.set_z(65.44452);
-  auto lm_provider_ = new LMProvider();
-  lm_provider_->FindNearestLaneMarkerIndex(position);
-  std::pair<int, int> before_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  lm_provider_->GetLeftLaneMarkerIndex();
-  std::pair<int, int> after_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_EQ(after_action_index.first, before_action_index.first - 1);
-  EXPECT_EQ(after_action_index.second, before_action_index.second);
+  LMProvider* lm_provider_ = new LMProvider();
+  const std::pair<int, int> nearest_index =
+      lm_provider_->FindNearestLaneMarkerIndex(position);
+  const std::pair<int, int> left_index =
+      lm_provider_->GetLeftLaneMarkerIndex(nearest_index);
+  EXPECT_EQ(left_index.first, nearest_index.first - 1);
+  EXPECT_EQ(left_index.second, nearest_index.second);
+  EXPECT_EQ(0, left_index.first);
+  EXPECT_EQ(1759, left_index.second);
 }
 
 TEST(LMProviderTest, GetRightLaneMarkerIndex) {
@@ -96,15 +88,19 @@ TEST(LMProviderTest, GetRightLaneMarkerIndex) {
   position.set_x(6882291.98649);
   position.set_y(3111354.33775);
   position.set_z(65.44452);
-  auto lm_provider_ = new LMProvider();
-  lm_provider_->FindNearestLaneMarkerIndex(position);
-  std::pair<int, int> before_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  lm_provider_->GetLeftLaneMarkerIndex();
-  std::pair<int, int> after_action_index =
-      lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_EQ(after_action_index.first + 1, before_action_index.first);
-  EXPECT_EQ(after_action_index.second, before_action_index.second);
+  LMProvider* lm_provider_ = new LMProvider();
+  const std::pair<int, int> nearest_index =
+      lm_provider_->FindNearestLaneMarkerIndex(position);
+  const std::pair<int, int> index =
+      lm_provider_->GetLeftLaneMarkerIndex(nearest_index);
+  const std::pair<int, int> right_index =
+      lm_provider_->GetRightLaneMarkerIndex(index);
+  EXPECT_EQ(right_index.first, nearest_index.first);
+  EXPECT_EQ(right_index.second, nearest_index.second);
+  EXPECT_EQ(0, index.first);
+  EXPECT_EQ(1759, index.second);
+  EXPECT_EQ(1, right_index.first);
+  EXPECT_EQ(1759, right_index.second);
 }
 
 TEST(LMProviderTest, GetLaneMarker) {
@@ -112,15 +108,14 @@ TEST(LMProviderTest, GetLaneMarker) {
   position.set_x(6882291.98649);
   position.set_y(3111354.33775);
   position.set_z(65.44452);
-  auto lm_provider_ = new LMProvider();
-  lm_provider_->FindNearestLaneMarkerIndex(position);
-  std::pair<int, int> result_index = lm_provider_->GetCurrentLaneMarkerIndex();
-  EXPECT_NE(std::numeric_limits<int>::max(), result_index.first);
-  EXPECT_NE(std::numeric_limits<int>::max(), result_index.second);
+  LMProvider* lm_provider_ = new LMProvider();
+  const std::pair<int, int> nearest_index =
+      lm_provider_->FindNearestLaneMarkerIndex(position);
   apollo::localization::OdometryLaneMarker lane_marker =
-      lm_provider_->GetLaneMarker();
+      lm_provider_->GetLaneMarker(nearest_index);
   EXPECT_TRUE(lane_marker.has_start_position());
   EXPECT_TRUE(lane_marker.has_end_position());
+  EXPECT_DOUBLE_EQ(1, lane_marker.z_length());
 }
 }  // namespace localization
 }  // namespace apollo

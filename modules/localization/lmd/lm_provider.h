@@ -46,42 +46,54 @@ class LMProvider {
   /**
    * @brief Find the nearest lane marker index with specified position.
    * @param position Specified position.
+   * @return index pair of the nearest lane marker
    */
-  void FindNearestLaneMarkerIndex(const apollo::common::PointENU& position);
+  const std::pair<int, int> FindNearestLaneMarkerIndex(
+      const apollo::common::PointENU& position) const;
 
   /**
    * @brief Get the index of prev lane marker.
+   * @param current_index index pair of current lane marker.
+   * @return index pair of prev lane marker.
    */
-  void GetPrevLaneMarkerIndex();
+  const std::pair<int, int> GetPrevLaneMarkerIndex(
+      const std::pair<int, int>& current_index) const;
 
   /**
    * @brief Get the index of next lane marker.
+   * @param current_index index pair of current lane marker.
+   * @return index pair of next lane marker.
    */
-  void GetNextLaneMarkerIndex();
+  const std::pair<int, int> GetNextLaneMarkerIndex(
+      const std::pair<int, int>& current_index) const;
 
   /**
    * @brief Get the index of left lane marker.
+   * @param current_index index pair of current lane marker.
+   * @return index pair of left lane marker.
    */
-  void GetLeftLaneMarkerIndex();
+  const std::pair<int, int> GetLeftLaneMarkerIndex(
+      const std::pair<int, int>& current_index) const;
 
   /**
    * @brief Get the index of right lane marker.
+   * @param current_index index pair of current lane marker.
+   * @return index pair of right lane marker.
    */
-  void GetRightLaneMarkerIndex();
+  const std::pair<int, int> GetRightLaneMarkerIndex(
+      const std::pair<int, int>& current_index) const;
+
 
   /**
-   * @brief Get the index of current lane marker.
-   */
-  const std::pair<int, int>& GetCurrentLaneMarkerIndex() const;
-  /**
    * @brief Get lane marker according to index pair.
-   * @return A lane marker or nullptr.
+   * @brief current_index index pair of current lane marker
+   * @return A lane marker with the desired index pair.
    */
-  const apollo::localization::OdometryLaneMarker& GetLaneMarker() const;
+  const apollo::localization::OdometryLaneMarker& GetLaneMarker(
+      const std::pair<int, int>& current_index) const;
 
  private:
   apollo::localization::OdometryLaneMarkersPack LaneMarkersPack_;
-  std::pair<int, int> lane_index;
   /**
    * @brief Calclute the distance from point position to the line of start_pos
    * and end_pos.

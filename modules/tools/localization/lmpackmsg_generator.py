@@ -83,6 +83,7 @@ def write_info(source_tuple, filename):
         left_lane_marker.c1_heading_angle = left_c1_heading_angle
         left_lane_marker.c2_curvature = left_c2_curvature
         left_lane_marker.c3_curvature_derivative = left_c3_curvature_derivative
+        left_lane_marker.z_length = 1
 
         right_lane_marker = right_lane_marker_group.lane_marker.add()
         right_c0_position = (source_tuple[0][obs_index].lane_marker
@@ -114,6 +115,7 @@ def write_info(source_tuple, filename):
         right_lane_marker.c1_heading_angle = right_c1_heading_angle
         right_lane_marker.c2_curvature = right_c2_curvature
         right_lane_marker.c3_curvature_derivative = right_c3_curvature_derivative
+        right_lane_marker.z_length = 1
     f.write(odometry_lane_markers_pack.SerializeToString())
     f.close()
 

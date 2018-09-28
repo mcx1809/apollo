@@ -25,8 +25,6 @@ LMProvider::LMProvider() {
   CHECK(apollo::common::util::GetProtoFromFile(FLAGS_lmd_rawinput_file,
                                                &LaneMarkersPack_))
       << "Unable to get raw lanemarkers from file " << FLAGS_lmd_rawinput_file;
-  lane_index.first = std::numeric_limits<int>::max();
-  lane_index.second = std::numeric_limits<int>::max();
 }
 
 double LMProvider::CalculateDistance(
@@ -47,11 +45,13 @@ double LMProvider::CalculateDistance(
   return as * sin_A;
 }
 
-void LMProvider::FindNearestLaneMarkerIndex(
-    const apollo::common::PointENU& position) {
+const std::pair<int, int> LMProvider::FindNearestLaneMarkerIndex(
+    const apollo::common::PointENU& position) const {
   CHECK(LaneMarkersPack_.lane_markers_size() != 0)
       << "Empty LaneMarkersPack from file " << FLAGS_lmd_rawinput_file;
   double distance = std::numeric_limits<double>::max();
+  std::pair<int, int> result(std::numeric_limits<int>::max(),
+                             std::numeric_limits<int>::max());
   for (int lane_mark_pack_index = 0;
        lane_mark_pack_index < LaneMarkersPack_.lane_markers_size();
        lane_mark_pack_index++) {
@@ -79,93 +79,103 @@ void LMProvider::FindNearestLaneMarkerIndex(
               .end_position();
       if (CalculateDistance(position, start_point, end_point) < distance) {
         distance = CalculateDistance(position, start_point, end_point);
-        lane_index.first = lane_mark_pack_index;
-        lane_index.second = lane_marker_index;
+        result.first = lane_mark_pack_index;
+        result.second = lane_marker_index;
       }
     }
   }
+  return result;
 }
 
-void LMProvider::GetPrevLaneMarkerIndex() {
-  CHECK(lane_index.first >= 0)
+const std::pair<int, int> LMProvider::GetPrevLaneMarkerIndex(
+    const std::pair<int, int>& current_index) const {
+  CHECK(current_index.first >= 0)
       << "index of current ContourOdometryLaneMarkers must not be less than 0 ";
-  CHECK(lane_index.first < LaneMarkersPack_.lane_markers_size())
+  CHECK(current_index.first < LaneMarkersPack_.lane_markers_size())
       << "index of current ContourOdometryLaneMarkers can not be greater than "
          "size of OdometryLaneMarkersPack";
-  CHECK(lane_index.second <
-        LaneMarkersPack_.lane_markers(lane_index.first).lane_marker_size())
+  CHECK(current_index.second <
+        LaneMarkersPack_.lane_markers(current_index.first).lane_marker_size())
       << "index of current OdometryLaneMarker can not be greater than size "
          "of ContourOdometryLaneMarkers";
-  CHECK(lane_index.second > 0) << "To get prev lane marker, index of current "
-                                  "OdometryLaneMarker must be greater than 0 ";
-  lane_index.second -= 1;
+  CHECK(current_index.second > 0)
+      << "To get prev lane marker, index of current "
+         "OdometryLaneMarker must be greater than 0 ";
+  const std::pair<int, int> result(current_index.first,
+                                   current_index.second - 1);
+  return result;
 }
 
-void LMProvider::GetNextLaneMarkerIndex() {
-  CHECK(lane_index.first >= 0)
+const std::pair<int, int> LMProvider::GetNextLaneMarkerIndex(
+    const std::pair<int, int>& current_index) const {
+  CHECK(current_index.first >= 0)
       << "index of current ContourOdometryLaneMarkers must not be less than 0 ";
-  CHECK(lane_index.first < LaneMarkersPack_.lane_markers_size())
+  CHECK(current_index.first < LaneMarkersPack_.lane_markers_size())
       << "index of current ContourOdometryLaneMarkers can not be greater than "
          "size of OdometryLaneMarkersPack";
-  CHECK(lane_index.second >= 0)
+  CHECK(current_index.second >= 0)
       << "index of current OdometryLaneMarker must not be less than 0 ";
-  CHECK(lane_index.second <
-        LaneMarkersPack_.lane_markers(lane_index.first).lane_marker_size() - 1)
+  CHECK(current_index.second <
+        LaneMarkersPack_.lane_markers(current_index.first).lane_marker_size() -
+            1)
       << "To get next lane marker,index of next OdometryLaneMarker must be "
          "less than size of ContourOdometryLaneMarkers";
-  lane_index.second += 1;
+  const std::pair<int, int> result(current_index.first,
+                                   current_index.second + 1);
+  return result;
 }
 
-void LMProvider::GetLeftLaneMarkerIndex() {
-  CHECK(lane_index.first > 0)
-      << "To get left lane marker, index of left ContourOdometryLaneMarkers "
+const std::pair<int, int> LMProvider::GetLeftLaneMarkerIndex(
+    const std::pair<int, int>& current_index) const {
+  CHECK(current_index.first > 0)
+      << "to get left lane marker,index of current ContourOdometryLaneMarkers "
          "must not be less than 0 ";
-  CHECK(lane_index.first < LaneMarkersPack_.lane_markers_size())
-      << "index of current ContourOdometryLaneMarkers can not be greater than "
-         "size of OdometryLaneMarkersPack";
-  CHECK(lane_index.second >= 0)
-      << "index of current ContourOdometryLaneMarker must not be less than 0 ";
-  CHECK(lane_index.second <
-        LaneMarkersPack_.lane_markers(lane_index.first).lane_marker_size())
-      << "index of current ContourOdometryLaneMarker can not be greater than "
-         "size of ContourOdometryLaneMarkers";
-  lane_index.first -= 1;
+  CHECK(current_index.first < LaneMarkersPack_.lane_markers_size())
+      << "index of ContourOdometryLaneMarkers must be less than size of "
+         "OdometryLaneMarkersPack";
+  CHECK(current_index.second >= 0)
+      << "index of OdometryLaneMarker must not be less than 0 ";
+  CHECK(current_index.second <
+        LaneMarkersPack_.lane_markers(current_index.first).lane_marker_size())
+      << "index of OdometryLaneMarker must be less than size of "
+         "ContourOdometryLaneMarkers";
+  const std::pair<int, int> result(current_index.first - 1,
+                                   current_index.second);
+  return result;
 }
 
-void LMProvider::GetRightLaneMarkerIndex() {
-  CHECK(lane_index.first >= 0)
+const std::pair<int, int> LMProvider::GetRightLaneMarkerIndex(
+    const std::pair<int, int>& current_index) const {
+  CHECK(current_index.first >= 0)
       << "index of current ContourOdometryLaneMarkers must not be less than 0 ";
-  CHECK(lane_index.first < LaneMarkersPack_.lane_markers_size() - 1)
+  CHECK(current_index.first < LaneMarkersPack_.lane_markers_size() - 1)
       << "to get right lane marker, index of right ContourOdometryLaneMarkers "
-         "can not be greater than size of OdometryLaneMarkersPack";
-  CHECK(lane_index.second >= 0)
+         "must be less than size of OdometryLaneMarkersPack";
+  CHECK(current_index.second >= 0)
       << "index of OdometryLaneMarker must not be less than 0 ";
-  CHECK(lane_index.second <
-        LaneMarkersPack_.lane_markers(lane_index.first).lane_marker_size() - 1)
+  CHECK(current_index.second <
+        LaneMarkersPack_.lane_markers(current_index.first).lane_marker_size())
       << "index of OdometryLaneMarker can not be greater than size "
          "of ContourOdometryLaneMarkers";
-  lane_index.first -= 1;
+  const std::pair<int, int> result(current_index.first + 1,
+                                   current_index.second);
+  return result;
 }
-
-const std::pair<int, int>& LMProvider::GetCurrentLaneMarkerIndex() const {
-  return lane_index;
-}
-
-const apollo::localization::OdometryLaneMarker& LMProvider::GetLaneMarker()
-    const {
-  CHECK(lane_index.first >= 0)
-      << "index of current ContourOdometryLaneMarkers must not be less than 0 ";
-  CHECK(lane_index.first < LaneMarkersPack_.lane_markers_size())
-      << "index of current ContourOdometryLaneMarkers can not be greater than "
-         "size of OdometryLaneMarkersPack";
-  CHECK(lane_index.second <
-        LaneMarkersPack_.lane_markers(lane_index.first).lane_marker_size())
+const apollo::localization::OdometryLaneMarker& LMProvider::GetLaneMarker(
+    const std::pair<int, int>& current_index) const {
+  CHECK(current_index.first >= 0)
+      << "index of current ContourOdometryLaneMarkers must not be less than 0";
+  CHECK(current_index.first < LaneMarkersPack_.lane_markers_size())
+      << "index of current ContourOdometryLaneMarkers can not be greater "
+         "than size of OdometryLaneMarkersPack";
+  CHECK(current_index.second <
+        LaneMarkersPack_.lane_markers(current_index.first).lane_marker_size())
       << "index of current OdometryLaneMarker can not be greater than size "
          "of ContourOdometryLaneMarkers";
-  CHECK(lane_index.second >= 0)
+  CHECK(current_index.second >= 0)
       << "index of current OdometryLaneMarker must not be less than 0 ";
-  return LaneMarkersPack_.lane_markers(lane_index.first)
-      .lane_marker(lane_index.second);
+  return LaneMarkersPack_.lane_markers(current_index.first)
+      .lane_marker(current_index.second);
 }
 
 LMProvider::~LMProvider() {}
