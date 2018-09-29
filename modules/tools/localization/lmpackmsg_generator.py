@@ -1,13 +1,15 @@
 #!/usr/bin/python
+from math import cos
+from math import sin
 import rosbag
 from modules.localization.proto import odometry_lane_marker_pb2
 
 
 def read_bag(filename):
     """Extraxt obstacle messages and odometry messages from bag file
-    Args:         
+    Args:
             filename: ROS Bag file name
-    Returns:      
+    Returns:
             tuple: (obstaclemsg_list, odometrymsg_list)
     """
     obs_list = []      # obstacle message list
@@ -15,21 +17,82 @@ def read_bag(filename):
     bag = rosbag.Bag(filename)
     for topic, msg, t in bag.read_messages(topics=['/apollo/perception/obstacles']):
         obs_list.append(msg)
-    for topic, msg, t in bag.read_messages(topics=['/apollo/sensor/gnss/odometry']):
+    for topic, msg, t in bag.read_messages(topics=['/apollo/localization/pose']):
         odo_list.append(msg)
     bag.close()
     return (obs_list, odo_list)
 
 
+def calculate_location_offset(theta, relative_x, relative_y):
+    """Calculate location transform offset according to heading
+    Args:
+            theta: heading value
+            relative_x: x value in relative 
+            relative_y: y value in relative
+    Returns:
+            tuple: (x_offset_value, y_offset_value)
+    """
+    cos_theta = cos(theta)
+    sin_theta = sin(theta)
+    return (relative_x * cos_theta + relative_y * sin_theta,
+            - relative_x * sin_theta + relative_y * cos_theta)
+
+
+def get_curve_value(x_value, c0, c1, c2, c3):
+    """Get the curve y_value according to x_value and curve analysis formula
+        y = c3 * x**3 + c2 * x**2 + c1 * x + c0
+    Args:
+            x_value: value of x
+            c3: curvature_derivative
+            c2: curvature
+            c1: heading_angle
+            c0: position
+    Returns:
+            y_value according to the analysis formula with x = x_value
+    """
+    return c3 * (x_value ** 3) + c2 * (x_value ** 2) + c1 * x_value + c0
+
+
+def calculate_derivative(x_value, c0, c1, c2, c3):
+    """Get the first derivative value according to x_value and curve analysis formula
+        y = c3 * x**3 + c2 * x**2 + c1 * x + c0
+    Args:
+            x_value: value of x
+            c3: curvature_derivative
+            c2: curvature
+            c1: heading_angle
+            c0: position
+    Returns:
+            the first derivative value when x equal to x_value
+    """
+    return 3 * c3 * x_value ** 2 + 2 * c2 + c1
+
+
+def calculate_curvity(x_value, c0, c1, c2, c3):
+    """Get the curvity value according to x_value and curve analysis formula
+        y = c3 * x**3 + c2 * x**2 + c1 * x + c0
+    Args:
+            x_value: value of x
+            c3: curvature_derivative
+            c2: curvature
+            c1: heading_angle
+            c0: position
+    Returns:
+            K = |y''| / (1 + y'**2)**(3.0/2)
+            curvity_value K according to the analysis formula with x = x_value
+    """
+    return abs(6 * c3 * x_value + 2 * c2) / (
+        (1 + calculate_derivative(x_value, c0, c1, c2, c3) ** 2) ** (3.0/2))
+
+
 def write_info(source_tuple, filename):
-    """1. acquire the correct gps msg from odometrymsg according to the 
-              timestamp from obstaclemsg 
+    """1. acquire the correct gps msg from odometrymsg according to the
+              timestamp from obstaclemsg
        2. set the value of properties of OdometryLaneMarker message
        3. group the OdometryLaneMarker message to ContourOdometryLaneMarkers
-       4. set the property value of OdometryLaneMarkersPack according 
-              to ContourOdometryLaneMarkers
+       4. set the value of properties of OdometryLaneMarkersPack message
        5. write the serialized string of OdometryLaneMarkersPack message to file
-    Args: 
+    Args:
             source_tuple:(obstaclemsg_list, odometrymsg_list)
             filename: file to store protobuf msg
     """
@@ -50,10 +113,19 @@ def write_info(source_tuple, filename):
                 proportion = 0
             elif c == b:
                 proportion = 1
-        localization_former = source_tuple[1][odo_index].localization.position
-        localization_next = source_tuple[1][odo_index +
-                                            1].localization.position
-        left_lane_marker = left_lane_marker_group.lane_marker.add()
+        localization_former = source_tuple[1][odo_index].pose.position
+        localization_next = source_tuple[1][odo_index + 1].pose.position
+        vehicle_heading_former = source_tuple[1][odo_index].pose.heading
+        vehicle_heading_next = source_tuple[1][odo_index + 1].pose.heading
+        heading_value = (vehicle_heading_former * proportion +
+                         vehicle_heading_next * (1 - proportion))
+        initial_x = (localization_former.x * proportion +
+                     localization_next.x * (1 - proportion))
+        initial_y = (localization_former.y * proportion +
+                     localization_next.y * (1 - proportion))
+        initial_z = (localization_former.z * proportion +
+                     localization_next.z * (1 - proportion))
+        lmd_left_lane_marker = left_lane_marker_group.lane_marker.add()
         left_c0_position = (source_tuple[0][obs_index].lane_marker
                             .left_lane_marker.c0_position)
         left_c1_heading_angle = (source_tuple[0][obs_index].lane_marker
@@ -62,30 +134,22 @@ def write_info(source_tuple, filename):
                              .left_lane_marker.c2_curvature)
         left_c3_curvature_derivative = (source_tuple[0][obs_index].lane_marker
                                         .left_lane_marker.c3_curvature_derivative)
-        # the endpoint shift 1m from start point in x direction
-        left_endpoint_xshift = 1
-        # the endpoint shift left_endpoint_yshift from start point in y direction accordingly
-        left_endpoint_yshift = (left_c0_position + left_c1_heading_angle
-                                + left_c2_curvature + left_c3_curvature_derivative)
-        left_lane_marker.start_position.x = (localization_former.x * proportion
-                                             + localization_next.x * (1 - proportion))
-        left_lane_marker.start_position.y = (localization_former.y * proportion
-                                             + localization_next.y * (1 - proportion) + left_c0_position)
-        left_lane_marker.start_position.z = (localization_former.z * proportion
-                                             + localization_next.z * (1 - proportion))
-        left_lane_marker.end_position.x = (localization_former.x * proportion
-                                           + localization_next.x * (1 - proportion) + left_endpoint_xshift)
-        left_lane_marker.end_position.y = (localization_former.y * proportion
-                                           + localization_next.y * (1 - proportion) + left_endpoint_yshift)
-        left_lane_marker.end_position.z = (localization_former.z * proportion
-                                           + localization_next.z * (1 - proportion))
-        left_lane_marker.c0_position = left_c0_position
-        left_lane_marker.c1_heading_angle = left_c1_heading_angle
-        left_lane_marker.c2_curvature = left_c2_curvature
-        left_lane_marker.c3_curvature_derivative = left_c3_curvature_derivative
-        left_lane_marker.z_length = 1
+        for i in range(10):
+            point = lmd_left_lane_marker.marker_points.add()
+            location_offset = calculate_location_offset(- heading_value, i * 0.1, get_curve_value(
+                i * 0.1, left_c0_position, left_c1_heading_angle, left_c2_curvature,
+                left_c3_curvature_derivative))
+            point.position.x = initial_x + location_offset[0]
+            point.position.y = initial_y + location_offset[1]
+            point.position.z = initial_z
+            point.direct.x = 1
+            point.direct.y = calculate_derivative(i * 0.1, left_c0_position, left_c1_heading_angle,
+                                                  left_c2_curvature, left_c3_curvature_derivative)
+            point.direct.z = 0
+            point.curve = calculate_curvity(i * 0.1, left_c0_position, left_c1_heading_angle, left_c2_curvature,
+                                            left_c3_curvature_derivative)
 
-        right_lane_marker = right_lane_marker_group.lane_marker.add()
+        lmd_right_lane_marker = right_lane_marker_group.lane_marker.add()
         right_c0_position = (source_tuple[0][obs_index].lane_marker
                              .right_lane_marker.c0_position)
         right_c1_heading_angle = (source_tuple[0][obs_index].lane_marker
@@ -94,28 +158,20 @@ def write_info(source_tuple, filename):
                               .right_lane_marker.c2_curvature)
         right_c3_curvature_derivative = (source_tuple[0][obs_index].lane_marker
                                          .right_lane_marker.c3_curvature_derivative)
-        # the endpoint shift 1m from start point in x direction
-        right_endpoint_xshift = 1
-        # the endpoint shift left_endpoint_yshift from start point in y direction accordingly
-        right_endpoint_yshift = (right_c0_position + right_c1_heading_angle
-                                 + right_c2_curvature + right_c3_curvature_derivative)
-        right_lane_marker.start_position.x = (localization_former.x * proportion
-                                              + localization_next.x * (1 - proportion))
-        right_lane_marker.start_position.y = (localization_former.y * proportion
-                                              + localization_next.y * (1 - proportion) + right_c0_position)
-        right_lane_marker.start_position.z = (localization_former.z * proportion
-                                              + localization_next.z * (1 - proportion))
-        right_lane_marker.end_position.x = (localization_former.x * proportion
-                                            + localization_next.x * (1 - proportion) + right_endpoint_xshift)
-        right_lane_marker.end_position.y = (localization_former.y * proportion
-                                            + localization_next.y * (1 - proportion) + right_endpoint_yshift)
-        right_lane_marker.end_position.z = (localization_former.z * proportion
-                                            + localization_next.z * (1 - proportion))
-        right_lane_marker.c0_position = right_c0_position
-        right_lane_marker.c1_heading_angle = right_c1_heading_angle
-        right_lane_marker.c2_curvature = right_c2_curvature
-        right_lane_marker.c3_curvature_derivative = right_c3_curvature_derivative
-        right_lane_marker.z_length = 1
+        for i in range(10):
+            point = lmd_right_lane_marker.marker_points.add()
+            location_offset = calculate_location_offset(- heading_value, i * 0.1, get_curve_value(
+                i * 0.1, right_c0_position, right_c1_heading_angle, right_c2_curvature,
+                right_c3_curvature_derivative))
+            point.position.x = initial_x + location_offset[0]
+            point.position.y = initial_y + location_offset[1]
+            point.position.z = initial_z
+            point.direct.x = 1
+            point.direct.y = calculate_derivative(i * 0.1, right_c0_position, right_c1_heading_angle,
+                                                  right_c2_curvature, right_c3_curvature_derivative)
+            point.direct.z = 0
+            point.curve = calculate_curvity(i * 0.1, right_c0_position, right_c1_heading_angle,
+                                            right_c2_curvature, right_c3_curvature_derivative)
     f.write(odometry_lane_markers_pack.SerializeToString())
     f.close()
 
