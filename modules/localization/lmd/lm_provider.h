@@ -102,8 +102,7 @@ class LMProvider {
    * @return the distance value
    */
   double CalculateDistance(const apollo::common::PointENU& position,
-                           const apollo::common::PointENU& start_pos,
-                           const apollo::common::PointENU& end_pos) const;
+                           const apollo::common::PointENU& current_pos) const;
 };
 
 }  // namespace localization

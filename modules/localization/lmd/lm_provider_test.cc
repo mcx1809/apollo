@@ -21,22 +21,22 @@ namespace localization {
 
 TEST(LMProviderTest, FindNearestLaneMarkerIndex) {
   apollo::common::PointENU position;
-  position.set_x(6882291.98649);
-  position.set_y(3111354.33775);
-  position.set_z(65.44452);
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
   LMProvider* lm_provider_ = new LMProvider();
   const std::pair<int, int>& result_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
   EXPECT_EQ(1, result_index.first);
-  EXPECT_EQ(1759, result_index.second);
+  EXPECT_EQ(1126, result_index.second);
   delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetPrevLaneMarkerIndex) {
   apollo::common::PointENU position;
-  position.set_x(6882291.98649);
-  position.set_y(3111354.33775);
-  position.set_z(65.44452);
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
   LMProvider* lm_provider_ = new LMProvider();
   const std::pair<int, int> nearest_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
@@ -45,15 +45,15 @@ TEST(LMProviderTest, GetPrevLaneMarkerIndex) {
   EXPECT_EQ(prev_index.first, nearest_index.first);
   EXPECT_EQ(prev_index.second, nearest_index.second - 1);
   EXPECT_EQ(1, prev_index.first);
-  EXPECT_EQ(1758, prev_index.second);
+  EXPECT_EQ(1125, prev_index.second);
   delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetNextLaneMarkerIndex) {
   apollo::common::PointENU position;
-  position.set_x(6882291.98649);
-  position.set_y(3111354.33775);
-  position.set_z(65.44452);
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
   LMProvider* lm_provider_ = new LMProvider();
   const std::pair<int, int> nearest_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
@@ -62,15 +62,15 @@ TEST(LMProviderTest, GetNextLaneMarkerIndex) {
   EXPECT_EQ(next_index.first, nearest_index.first);
   EXPECT_EQ(next_index.second, nearest_index.second + 1);
   EXPECT_EQ(1, next_index.first);
-  EXPECT_EQ(1760, next_index.second);
+  EXPECT_EQ(1127, next_index.second);
   delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
   apollo::common::PointENU position;
-  position.set_x(6882291.98649);
-  position.set_y(3111354.33775);
-  position.set_z(65.44452);
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
   LMProvider* lm_provider_ = new LMProvider();
   const std::pair<int, int> nearest_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
@@ -79,15 +79,15 @@ TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
   EXPECT_EQ(left_index.first, nearest_index.first - 1);
   EXPECT_EQ(left_index.second, nearest_index.second);
   EXPECT_EQ(0, left_index.first);
-  EXPECT_EQ(1759, left_index.second);
+  EXPECT_EQ(1126, left_index.second);
   delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetRightLaneMarkerIndex) {
   apollo::common::PointENU position;
-  position.set_x(6882291.98649);
-  position.set_y(3111354.33775);
-  position.set_z(65.44452);
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
   LMProvider* lm_provider_ = new LMProvider();
   const std::pair<int, int> nearest_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
@@ -102,25 +102,31 @@ TEST(LMProviderTest, GetRightLaneMarkerIndex) {
   EXPECT_EQ(right_index.first, nearest_index.first);
   EXPECT_EQ(right_index.second, nearest_index.second);
   EXPECT_EQ(0, index.first);
-  EXPECT_EQ(1759, index.second);
+  EXPECT_EQ(1126, index.second);
   EXPECT_EQ(1, right_index.first);
-  EXPECT_EQ(1759, right_index.second);
+  EXPECT_EQ(1126, right_index.second);
   delete lm_provider_;
 }
 
 TEST(LMProviderTest, GetLaneMarker) {
   apollo::common::PointENU position;
-  position.set_x(6882291.98649);
-  position.set_y(3111354.33775);
-  position.set_z(65.44452);
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
   LMProvider* lm_provider_ = new LMProvider();
   const std::pair<int, int> nearest_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
   const apollo::localization::OdometryLaneMarker* lane_marker =
       lm_provider_->GetLaneMarker(nearest_index);
-  EXPECT_TRUE(lane_marker->has_start_position());
-  EXPECT_TRUE(lane_marker->has_end_position());
-  EXPECT_DOUBLE_EQ(1, lane_marker->z_length());
+  EXPECT_EQ(10, lane_marker->points_size());
+  for (int index = 0; index < lane_marker->points_size(); index++) {
+    EXPECT_EQ(1, lane_marker->points(index).direct().x());
+    EXPECT_EQ(0, lane_marker->points(index).direct().z());
+  }
+  EXPECT_DOUBLE_EQ(683094.82904500933, lane_marker->points(0).position().x());
+  EXPECT_DOUBLE_EQ(3110714.5319600403, lane_marker->points(0).position().y());
+  EXPECT_DOUBLE_EQ(57.115284788987609, lane_marker->points(0).position().z());
+
   delete lm_provider_;
 }
 }  // namespace localization
