@@ -46,7 +46,7 @@ class LMProvider {
   /**
    * @brief Find the nearest lane marker index with specified position.
    * @param position Specified position.
-   * @return index pair of the nearest lane marker
+   * @return index pair of the nearest lane marker or max int pair
    */
   const std::pair<int, int> FindNearestLaneMarkerIndex(
       const apollo::common::PointENU& position) const;
@@ -54,7 +54,7 @@ class LMProvider {
   /**
    * @brief Get the index of prev lane marker.
    * @param current_index index pair of current lane marker.
-   * @return index pair of prev lane marker.
+   * @return index pair of prev lane marker or max int pair.
    */
   const std::pair<int, int> GetPrevLaneMarkerIndex(
       const std::pair<int, int>& current_index) const;
@@ -62,7 +62,7 @@ class LMProvider {
   /**
    * @brief Get the index of next lane marker.
    * @param current_index index pair of current lane marker.
-   * @return index pair of next lane marker.
+   * @return index pair of next lane marker or max int pair.
    */
   const std::pair<int, int> GetNextLaneMarkerIndex(
       const std::pair<int, int>& current_index) const;
@@ -70,7 +70,7 @@ class LMProvider {
   /**
    * @brief Get the index of left lane marker.
    * @param current_index index pair of current lane marker.
-   * @return index pair of left lane marker.
+   * @return index pair of left lane marker or max int pair.
    */
   const std::pair<int, int> GetLeftLaneMarkerIndex(
       const std::pair<int, int>& current_index) const;
@@ -78,18 +78,17 @@ class LMProvider {
   /**
    * @brief Get the index of right lane marker.
    * @param current_index index pair of current lane marker.
-   * @return index pair of right lane marker.
+   * @return index pair of right lane marker or max int pair.
    */
   const std::pair<int, int> GetRightLaneMarkerIndex(
       const std::pair<int, int>& current_index) const;
 
-
   /**
    * @brief Get lane marker according to index pair.
    * @brief current_index index pair of current lane marker
-   * @return A lane marker with the desired index pair.
+   * @return A lane marker with the desired index pair or nullptr.
    */
-  const apollo::localization::OdometryLaneMarker& GetLaneMarker(
+  const apollo::localization::OdometryLaneMarker* GetLaneMarker(
       const std::pair<int, int>& current_index) const;
 
  private:
