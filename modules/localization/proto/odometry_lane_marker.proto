@@ -20,6 +20,17 @@ package apollo.localization;
 
 import "modules/common/proto/geometry.proto";
 
+message OdometryLaneMarkerPoint {
+  // Position
+  optional apollo.common.PointENU position = 1;
+
+  // Direct
+  optional apollo.common.Point3D direct = 2;
+
+  // Curvature
+  optional double curvature = 3;
+}
+
 message OdometryLaneMarker {
   // Type
   optional string type = 1;
@@ -27,24 +38,8 @@ message OdometryLaneMarker {
   // Quality
   optional double quality = 2;
 
-  // Equation X = c3 * Z^3 + c2 * Z^2 + c1 * Z + c0
-  optional double c0_position = 3;
-  optional double c1_heading_angle = 4;
-  optional double c2_curvature = 5;
-  optional double c3_curvature_derivative = 6;
-  optional double z_length = 7;
-
-  // Position of start point
-  optional apollo.common.PointENU start_position = 8;
-
-  // Position of end point
-  optional apollo.common.PointENU end_position = 9;
-
-  // Relative position of start point
-  optional apollo.common.Point3D rel_start_position = 10;
-
-  // Relative position of end point
-  optional apollo.common.Point3D rel_end_position = 11;
+  // Point
+  repeated OdometryLaneMarkerPoint points = 3;
 }
 
 message ContourOdometryLaneMarkers {
