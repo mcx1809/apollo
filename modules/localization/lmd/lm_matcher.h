@@ -44,6 +44,7 @@ namespace localization {
 class LMMatcher {
  public:
   explicit LMMatcher(LMProvider* provider);
+  virtual ~LMMatcher();
 
   /**
    * @brief  Find the matched lane markers.
@@ -57,6 +58,29 @@ class LMMatcher {
       const apollo::perception::LaneMarkers& lane_markers, double timestamp);
 
  private:
+ /**
+   * @brief  Find the best matched position between two lane markers and return the max match score.
+   * @param  estimated lane_marker from percption.
+   * @param  estimated lane_marker from map.
+   * @param the best matched position.
+   * @return the max match score.
+   */
+  double BestMatchScoreForTwoLane(
+      const apollo::perception::LaneMarker& per_lane_marker,
+      const apollo::localization::OdometryLaneMarker& map_lane_marker,
+      double* bestmatch_yposition);
+
+  double GetMold(const std::vector<double>& vec);
+
+  double GetSimilarity(const std::vector<double>& lhs,
+                       const std::vector<double>& rhs);
+
+  double Curvature(double a[], double b[], double c[]);
+
+  int Collinear(double a[], double b[], double c[]);
+
+  double Distance(double a[], double b[]);
+
   LMProvider* provider_;
 };
 
