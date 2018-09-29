@@ -19,8 +19,6 @@
 namespace apollo {
 namespace localization {
 
-class LMProviderTest : public ::testing::Test {};
-
 TEST(LMProviderTest, FindNearestLaneMarkerIndex) {
   apollo::common::PointENU position;
   position.set_x(6882291.98649);
