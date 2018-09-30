@@ -33,13 +33,12 @@
 #include "modules/localization/proto/imu.pb.h"
 #include "modules/localization/proto/localization.pb.h"
 
-#include "glog/logging.h"
-#include "gtest/gtest_prod.h"
-
 #include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/status/status.h"
-#include "modules/localization/lmd/lm_matcher.h"
 #include "modules/localization/lmd/lm_provider.h"
+#include "modules/localization/lmd/lm_sampler.h"
+#include "modules/localization/lmd/pc_map.h"
+#include "modules/localization/lmd/pc_registrator.h"
 #include "modules/localization/localization_base.h"
 
 /**
@@ -85,7 +84,9 @@ class LMDLocalization : public LocalizationBase {
   apollo::common::monitor::MonitorLogger monitor_logger_;
   const std::vector<double> map_offset_;
   LMProvider lm_provider_;
-  LMMatcher lm_matcher_;
+  LMSampler lm_sampler_;
+  PCMap pc_map_;
+  PCRegistrator pc_registrator_;
   bool has_last_pose_ = false;
   apollo::localization::Pose last_pose_;
   double last_pose_timestamp_sec_;

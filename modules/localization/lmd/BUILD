@@ -5,14 +5,18 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "lmd_localization",
     srcs = [
-        "lm_matcher.cc",
         "lm_provider.cc",
+        "lm_sampler.cc",
         "lmd_localization.cc",
+        "pc_map.cc",
+        "pc_registrator.cc",
     ],
     hdrs = [
-        "lm_matcher.h",
         "lm_provider.h",
+        "lm_sampler.h",
         "lmd_localization.h",
+        "pc_map.h",
+        "pc_registrator.h",
     ],
     deps = [
         "//modules/common",
@@ -35,9 +39,11 @@ cc_test(
     name = "lmd_localization_test",
     size = "small",
     srcs = [
-        "lm_matcher_test.cc",
         "lm_provider_test.cc",
+        "lm_sampler_test.cc",
         "lmd_localization_test.cc",
+        "pc_map_test.cc",
+        "pc_registrator_test.cc",
     ],
     data = ["//modules/localization:localization_testdata"],
     deps = [

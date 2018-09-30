@@ -16,6 +16,8 @@
 
 #include "modules/localization/lmd/lmd_localization.h"
 
+#include "glog/logging.h"
+
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/math/quaternion.h"
 #include "modules/common/time/time.h"
@@ -32,6 +34,10 @@ using apollo::common::adapter::ImuAdapter;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::common::time::Clock;
 using apollo::perception::PerceptionObstacles;
+
+namespace {
+constexpr double kPCMapSearchRadius = 10.0;
+}  // namespace
 
 template <class T>
 static T InterpolateXYZ(const T &p1, const T &p2, const double frac1) {
@@ -163,7 +169,8 @@ static void FillPoseFromImu(const Pose &imu, Pose *pose) {
 LMDLocalization::LMDLocalization()
     : monitor_logger_(MonitorMessageItem::LOCALIZATION),
       map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z},
-      lm_matcher_(&lm_provider_) {}
+      pc_map_(&lm_provider_),
+      pc_registrator_(&pc_map_) {}
 
 LMDLocalization::~LMDLocalization() {}
 
@@ -248,17 +255,38 @@ void LMDLocalization::OnPerceptionObstacles(
 
     // TODO(all):
     const auto &position_estimated = last_pose_.position();
+    auto heading_estimated = last_pose_.heading();
 
-    const auto &lane_markers = obstacles.lane_marker();
-    auto odometry_lane_markers = lm_matcher_.MatchLaneMarkers(
-        position_estimated, lane_markers, timestamp);
-
-    if (odometry_lane_markers.size()) {
-      for (const auto &olm : odometry_lane_markers) {
-      }
+    // update pc_map
+    if (pc_map_.UpdateRange(position_estimated, kPCMapSearchRadius) !=
+        Status::OK()) {
+      AERROR << "update pc_map failed";
+      return;
     }
 
+    // sampling lane markers
+    const auto &lane_markers = obstacles.lane_marker();
+    auto source_points = lm_sampler_.Sampling(lane_markers);
+
+    // point cloud registration
+    PointENU position;
+    double heading;
+    pc_registrator_.Register(source_points, position_estimated,
+                             heading_estimated, &position, &heading);
+
     Pose new_pose;
+
+    // position
+    // world frame -> map frame
+    new_pose.mutable_position()->set_x(position.x() - map_offset_[0]);
+    new_pose.mutable_position()->set_y(position.y() - map_offset_[1]);
+    new_pose.mutable_position()->set_z(position.z() - map_offset_[2]);
+
+    // heading
+    new_pose.set_heading(heading);
+
+    // linear velocity
+    // TODO(all):
 
     // IMU
     CorrectedImu imu_msg;
