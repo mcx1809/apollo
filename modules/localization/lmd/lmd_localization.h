@@ -76,7 +76,9 @@ class LMDLocalization : public LocalizationBase {
       const apollo::perception::PerceptionObstacles &obstacles);
   void OnTimer(const ros::TimerEvent &event);
   void PrepareLocalizationMsg(LocalizationEstimate *localization);
-  bool FindMatchingIMU(const double timestamp_sec, CorrectedImu *imu_msg);
+  bool PredictPose(const Pose &old_pose, double old_timestamp_sec,
+                   double new_timestamp_sec, Pose *new_pose);
+  bool FindMatchingIMU(double timestamp_sec, CorrectedImu *imu_msg);
   void RunWatchDog();
 
  private:
@@ -88,7 +90,7 @@ class LMDLocalization : public LocalizationBase {
   PCMap pc_map_;
   PCRegistrator pc_registrator_;
   bool has_last_pose_ = false;
-  apollo::localization::Pose last_pose_;
+  Pose last_pose_;
   double last_pose_timestamp_sec_;
 };
 

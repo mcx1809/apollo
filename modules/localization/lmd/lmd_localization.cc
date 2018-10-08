@@ -16,11 +16,9 @@
 
 #include "modules/localization/lmd/lmd_localization.h"
 
-#include "glog/logging.h"
-
 #include "modules/common/adapters/adapter_manager.h"
+#include "modules/common/log.h"
 #include "modules/common/math/quaternion.h"
-#include "modules/common/time/time.h"
 #include "modules/localization/common/localization_gflags.h"
 
 namespace apollo {
@@ -32,8 +30,10 @@ using apollo::common::Status;
 using apollo::common::adapter::AdapterManager;
 using apollo::common::adapter::ImuAdapter;
 using apollo::common::monitor::MonitorMessageItem;
-using apollo::common::time::Clock;
 using apollo::perception::PerceptionObstacles;
+using common::math::HeadingToQuaternion;
+using common::math::QuaternionRotate;
+using common::math::QuaternionToHeading;
 
 namespace {
 constexpr double kPCMapSearchRadius = 10.0;
@@ -119,7 +119,7 @@ static void FillPoseFromImu(const Pose &imu, Pose *pose) {
         Eigen::Vector3d orig(imu.linear_acceleration().x(),
                              imu.linear_acceleration().y(),
                              imu.linear_acceleration().z());
-        auto vec = common::math::QuaternionRotate(pose->orientation(), orig);
+        auto vec = QuaternionRotate(pose->orientation(), orig);
         pose->mutable_linear_acceleration()->set_x(vec[0]);
         pose->mutable_linear_acceleration()->set_y(vec[1]);
         pose->mutable_linear_acceleration()->set_z(vec[2]);
@@ -145,7 +145,7 @@ static void FillPoseFromImu(const Pose &imu, Pose *pose) {
         Eigen::Vector3d orig(imu.angular_velocity().x(),
                              imu.angular_velocity().y(),
                              imu.angular_velocity().z());
-        auto vec = common::math::QuaternionRotate(pose->orientation(), orig);
+        auto vec = QuaternionRotate(pose->orientation(), orig);
         pose->mutable_angular_velocity()->set_x(vec[0]);
         pose->mutable_angular_velocity()->set_y(vec[1]);
         pose->mutable_angular_velocity()->set_z(vec[2]);
@@ -219,9 +219,9 @@ void LMDLocalization::OnGps(const localization::Gps &gps) {
     // orientation
     if (pose.has_orientation()) {
       new_pose.mutable_orientation()->CopyFrom(pose.orientation());
-      auto heading = common::math::QuaternionToHeading(
-          pose.orientation().qw(), pose.orientation().qx(),
-          pose.orientation().qy(), pose.orientation().qz());
+      auto heading =
+          QuaternionToHeading(pose.orientation().qw(), pose.orientation().qx(),
+                              pose.orientation().qy(), pose.orientation().qz());
       new_pose.set_heading(heading);
     }
 
@@ -253,9 +253,15 @@ void LMDLocalization::OnPerceptionObstacles(
     auto timestamp = obstacles.header().timestamp_sec();
     if (last_pose_timestamp_sec_ > timestamp) return;
 
-    // TODO(all):
-    const auto &position_estimated = last_pose_.position();
-    auto heading_estimated = last_pose_.heading();
+    // predict pose
+    Pose new_pose;
+    if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp,
+                    &new_pose)) {
+      AERROR << "Predict pose failed. ";
+      return;
+    }
+    const auto &position_estimated = new_pose.position();
+    auto heading_estimated = new_pose.heading();
 
     // update pc_map
     if (pc_map_.UpdateRange(position_estimated, kPCMapSearchRadius) !=
@@ -274,28 +280,30 @@ void LMDLocalization::OnPerceptionObstacles(
     pc_registrator_.Register(source_points, position_estimated,
                              heading_estimated, &position, &heading);
 
-    Pose new_pose;
-
     // position
     // world frame -> map frame
     new_pose.mutable_position()->set_x(position.x() - map_offset_[0]);
     new_pose.mutable_position()->set_y(position.y() - map_offset_[1]);
     new_pose.mutable_position()->set_z(position.z() - map_offset_[2]);
 
-    // heading
+    // orientation
     new_pose.set_heading(heading);
+    auto orientation = HeadingToQuaternion(heading);
+    new_pose.mutable_orientation()->set_qx(orientation.x());
+    new_pose.mutable_orientation()->set_qy(orientation.y());
+    new_pose.mutable_orientation()->set_qz(orientation.z());
+    new_pose.mutable_orientation()->set_qw(orientation.w());
 
     // linear velocity
-    // TODO(all):
+    auto dt = timestamp - last_pose_timestamp_sec_;
+    const auto &last_position = last_pose_.position();
+    new_pose.mutable_linear_velocity()->set_x(
+        (position.x() - last_position.x()) / dt);
+    new_pose.mutable_linear_velocity()->set_x(
+        (position.y() - last_position.y()) / dt);
+    new_pose.mutable_linear_velocity()->set_x(
+        (position.z() - last_position.z()) / dt);
 
-    // IMU
-    CorrectedImu imu_msg;
-    if (!FindMatchingIMU(timestamp, &imu_msg)) return;
-    CHECK(imu_msg.has_imu());
-    const auto &imu = imu_msg.imu();
-    FillPoseFromImu(imu, &new_pose);
-
-    has_last_pose_ = true;
     last_pose_.CopyFrom(new_pose);
     last_pose_timestamp_sec_ = timestamp;
   }
@@ -328,7 +336,15 @@ void LMDLocalization::PrepareLocalizationMsg(
   AdapterManager::FillLocalizationHeader(FLAGS_localization_module_name,
                                          localization);
 
-  // TODO(all):
+  // predict pose
+  Pose new_pose;
+  auto timestamp = localization->header().timestamp_sec();
+  if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp, &new_pose)) {
+    AERROR << "Predict pose failed. ";
+    return;
+  }
+  last_pose_ = new_pose;
+  last_pose_timestamp_sec_ = timestamp;
 
   // measurement_time
   localization->set_measurement_time(last_pose_timestamp_sec_);
@@ -337,7 +353,16 @@ void LMDLocalization::PrepareLocalizationMsg(
   localization->mutable_pose()->CopyFrom(last_pose_);
 }
 
-bool LMDLocalization::FindMatchingIMU(const double timestamp_sec,
+bool LMDLocalization::PredictPose(const Pose &old_pose,
+                                  double old_timestamp_sec,
+                                  double new_timestamp_sec, Pose *new_pose) {
+  // TODO(all):
+  new_pose->CopyFrom(old_pose);
+
+  return true;
+}
+
+bool LMDLocalization::FindMatchingIMU(double timestamp_sec,
                                       CorrectedImu *imu_msg) {
   auto *imu_adapter = AdapterManager::GetImu();
   if (imu_adapter->Empty()) {

@@ -16,6 +16,8 @@
 
 #include "modules/localization/lmd/pc_registrator.h"
 
+#include <limits>
+
 #include "modules/common/log.h"
 
 namespace apollo {
@@ -33,6 +35,14 @@ void PCRegistrator::Register(const std::vector<PCSourcePoint>& source_points,
                              const PointENU& position_estimated,
                              double heading_estimated, const PointENU* position,
                              double* heading) {}
+
+double PCRegistrator::ComputeError(
+    const std::vector<PCSourcePoint>& source_points,
+    const apollo::common::PointENU& position_estimated,
+    double heading_estimated) {
+      
+  return 0.0;
+}
 
 }  // namespace localization
 }  // namespace apollo
