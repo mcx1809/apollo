@@ -91,8 +91,18 @@ class LMProvider {
   const apollo::localization::OdometryLaneMarker* GetLaneMarker(
       const std::pair<int, int>& current_index) const;
 
- private:
-  apollo::localization::OdometryLaneMarkersPack LaneMarkersPack_;
+  /**
+   * @brief Get the lane marker pack size.
+   * @return size of LaneMarkersPack_
+   */
+  const int GetLaneMarkerPackSize() const;
+
+  /**
+   * @brief Get the lane marker size according to the given pack_index.
+   * @return size of Lane Markers of the given pack_index
+   */
+  const int GetLaneMarkerSize(const int& pack_index) const;
+
   /**
    * @brief Calclute the distance from point position to the line of start_pos
    * and end_pos.
@@ -103,6 +113,9 @@ class LMProvider {
    */
   double CalculateDistance(const apollo::common::PointENU& position,
                            const apollo::common::PointENU& current_pos) const;
+
+ private:
+  apollo::localization::OdometryLaneMarkersPack LaneMarkersPack_;
 };
 
 }  // namespace localization

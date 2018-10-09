@@ -19,6 +19,34 @@
 namespace apollo {
 namespace localization {
 
+TEST(LMProviderTest, GetLaneMarkerPackSize) {
+  LMProvider* lm_provider_ = new LMProvider();
+  EXPECT_EQ(2, lm_provider_->GetLaneMarkerPackSize());
+  delete lm_provider_;
+}
+
+TEST(LMProviderTest, GetLaneMarkerSize) {
+  LMProvider* lm_provider_ = new LMProvider();
+  EXPECT_EQ(2641, lm_provider_->GetLaneMarkerSize(0));
+  EXPECT_EQ(2641, lm_provider_->GetLaneMarkerSize(1));
+  delete lm_provider_;
+}
+
+TEST(LMProviderTest, CalculateDistance) {
+  apollo::common::PointENU position;
+  position.set_x(682375.86553);
+  position.set_y(3111283.00623);
+  position.set_z(66.24156);
+  apollo::common::PointENU position_destination;
+  position_destination.set_x(682275.86553);
+  position_destination.set_y(3111183.00623);
+  position_destination.set_z(56.24156);
+  LMProvider* lm_provider_ = new LMProvider();
+  EXPECT_DOUBLE_EQ(141.42135623730951, lm_provider_->CalculateDistance(
+                                           position, position_destination));
+  delete lm_provider_;
+}
+
 TEST(LMProviderTest, FindNearestLaneMarkerIndex) {
   apollo::common::PointENU position;
   position.set_x(682375.86553);

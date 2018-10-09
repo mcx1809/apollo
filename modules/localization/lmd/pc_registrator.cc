@@ -159,7 +159,7 @@ double PCRegistrator::ComputeError(
     enu_position.set_x(enu_x);
     enu_position.set_y(enu_y);
     enu_position.set_z(0.0);
-    auto nearest_p = map_->GetMatchedPoint(enu_position);
+    auto nearest_p = map_->GetNearestPoint(enu_position);
     if (!nearest_p) {
       ++not_found;
       continue;

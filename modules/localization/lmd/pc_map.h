@@ -22,6 +22,10 @@
 #ifndef MODULES_LOCALIZATION_LMD_PC_MAP_H_
 #define MODULES_LOCALIZATION_LMD_PC_MAP_H_
 
+#include <iterator>
+#include <list>
+#include <utility>
+
 #include "modules/common/proto/geometry.pb.h"
 
 #include "modules/common/status/status.h"
@@ -36,7 +40,6 @@ namespace localization {
 
 /**
  * @struct PCMapPoint
- *
  * @brief  Point stored in map.
  */
 struct PCMapPoint {
@@ -45,8 +48,76 @@ struct PCMapPoint {
   apollo::common::PointENU position;
   apollo::common::Point3D direction;
   double curvature;
+  explicit PCMapPoint(
+      const apollo::localization::OdometryLaneMarkerPoint& point) {
+    position = point.position();
+    direction = point.direct();
+    curvature = point.curvature();
+  }
 };
 
+class MapNode {
+ public:
+  /**
+   * @brief  Construct map_node according to the given params.
+   * @param start_x The x value of upper_left point.
+   * @param start_y The y value of upper_left point.
+   * @param width   The width value
+   * @param height  The height value
+   * @param current_level The current map level value
+   * @param map_level     The max map level value
+   * @param parent_ptr    The pointer to upper_level mapnode
+   */
+  MapNode(double start_x, double start_y, double width, double height,
+          int current_level, int map_level, MapNode* parent_ptr = nullptr);
+  ~MapNode();
+
+ public:
+  /**
+   * @brief  Insert PCMapPoint* to MapNode.
+   * @param object pointer to the PCMapPoint.
+   */
+  void InsertMapPoint(PCMapPoint* object);
+
+  /**
+   * @brief  Get the PCMapPoint* list of samllest MapNode Range which contains
+   * (pos_x,pos_y).
+   * @param  pos_x The x value of point to search.
+   * @param  pos_y The y value of point to search.
+   */
+  std::list<PCMapPoint*> GetMapPoints(float pos_x, float pos_y);
+
+ private:
+  /**
+   * @brief  Remove all PCMapPoint* in MapNode range.
+   * @param  map_start_x The x value of upper_left point of MapNode range.
+   * @param  map_start_y The y value of upper_left point of MapNode range.
+   * @param  map_width   The width value of MapNode range.
+   * @param  map_height  The height value of MapNode range.
+   */
+  void RemoveMapPoints(float map_start_x, float map_start_y, float map_width,
+                       float map_height);
+
+  bool IsContain(float map_start_x, float map_start_y, float map_width,
+                 float map_height, MapNode* sub_node) const;
+
+  bool IsContain(float map_start_x, float map_start_y, float map_width,
+                 float map_height, float pos_x, float pos_y) const;
+
+ private:
+  double map_start_x_;
+  double map_start_y_;
+  double map_width_;
+  double map_height_;
+  int current_map_level_;
+  int max_map_level_;
+  MapNode* parent;
+  MapNode* up_right = nullptr;
+  MapNode* up_left = nullptr;
+  MapNode* down_left = nullptr;
+  MapNode* down_right = nullptr;
+  std::list<PCMapPoint*> points;
+};
 /**
  * @class PCMap
  *
@@ -66,14 +137,16 @@ class PCMap {
                                      double radius);
 
   /**
-   * @brief  Find the matched point.
-   * @param position The position.
-   * @return The matched point or nullptr.
+   * @brief  Find the nearest point in lane_marker according to the given
+   * position.
+   * @param position The given position.
+   * @return The nearest point in lane_marker or nullptr.
    */
-  PCMapPoint* GetMatchedPoint(const apollo::common::PointENU& position);
+  PCMapPoint* GetNearestPoint(const apollo::common::PointENU& position);
 
  private:
   LMProvider* provider_;
+  MapNode* root = nullptr;
 };
 
 }  // namespace localization

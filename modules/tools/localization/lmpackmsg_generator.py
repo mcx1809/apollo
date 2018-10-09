@@ -146,9 +146,8 @@ def write_info(source_tuple, filename):
             point.direct.y = calculate_derivative(i * 0.1, left_c0_position, left_c1_heading_angle,
                                                   left_c2_curvature, left_c3_curvature_derivative)
             point.direct.z = 0
-            point.curve = calculate_curvity(i * 0.1, left_c0_position, left_c1_heading_angle, left_c2_curvature,
-                                            left_c3_curvature_derivative)
-
+            point.curve = calculate_curvity(i * 0.1, left_c0_position, left_c1_heading_angle,
+                                            left_c2_curvature, left_c3_curvature_derivative)
         lmd_right_lane_marker = right_lane_marker_group.lane_marker.add()
         right_c0_position = (source_tuple[0][obs_index].lane_marker
                              .right_lane_marker.c0_position)
