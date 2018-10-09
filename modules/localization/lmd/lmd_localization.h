@@ -71,14 +71,17 @@ class LMDLocalization : public LocalizationBase {
   apollo::common::Status Stop() override;
 
  private:
-  void OnGps(const localization::Gps &gps);
+  void OnGps(const Gps &gps);
   void OnPerceptionObstacles(
       const apollo::perception::PerceptionObstacles &obstacles);
   void OnTimer(const ros::TimerEvent &event);
   void PrepareLocalizationMsg(LocalizationEstimate *localization);
+  bool GetGpsPose(const Gps &gps, Pose *pose, double *timestamp_sec);
   bool PredictPose(const Pose &old_pose, double old_timestamp_sec,
                    double new_timestamp_sec, Pose *new_pose);
+  bool FindMatchingGPS(double timestamp_sec, Gps *gps_msg);
   bool FindMatchingIMU(double timestamp_sec, CorrectedImu *imu_msg);
+  void PrintPoseError(const Pose &pose, double timestamp_sec);
   void RunWatchDog();
 
  private:

@@ -28,12 +28,13 @@ using apollo::common::Point3D;
 using apollo::common::PointENU;
 using apollo::common::Status;
 using apollo::common::adapter::AdapterManager;
+using apollo::common::adapter::GpsAdapter;
 using apollo::common::adapter::ImuAdapter;
+using apollo::common::math::HeadingToQuaternion;
+using apollo::common::math::QuaternionRotate;
+using apollo::common::math::QuaternionToHeading;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::perception::PerceptionObstacles;
-using common::math::HeadingToQuaternion;
-using common::math::QuaternionRotate;
-using common::math::QuaternionToHeading;
 
 namespace {
 constexpr double kPCMapSearchRadius = 10.0;
@@ -53,6 +54,84 @@ static T InterpolateXYZ(const T &p1, const T &p2, const double frac1) {
     p.set_z(p1.z() * frac2 + p2.z() * frac1);
   }
   return p;
+}
+
+template <class T>
+static T InterpolateXYZW(const T &p1, const T &p2, const double frac1) {
+  T p;
+  double frac2 = 1.0 - frac1;
+  if (p1.has_qx() && !std::isnan(p1.qx()) && p2.has_qx() &&
+      !std::isnan(p2.qx())) {
+    p.set_qx(p1.qx() * frac2 + p2.qx() * frac1);
+  }
+  if (p1.has_qy() && !std::isnan(p1.qy()) && p2.has_qy() &&
+      !std::isnan(p2.qy())) {
+    p.set_qy(p1.qy() * frac2 + p2.qy() * frac1);
+  }
+  if (p1.has_qz() && !std::isnan(p1.qz()) && p2.has_qz() &&
+      !std::isnan(p2.qz())) {
+    p.set_qz(p1.qz() * frac2 + p2.qz() * frac1);
+  }
+  if (p1.has_qw() && !std::isnan(p1.qw()) && p2.has_qw() &&
+      !std::isnan(p2.qw())) {
+    p.set_qw(p1.qw() * frac2 + p2.qw() * frac1);
+  }
+  return p;
+}
+
+static bool InterpolateGPS(const Gps &gps1, const Gps &gps2,
+                           const double timestamp_sec, Gps *gps_msg) {
+  if (!(gps1.has_header() && gps1.header().has_timestamp_sec() &&
+        gps2.has_header() && gps2.header().has_timestamp_sec() &&
+        gps1.has_localization() && gps2.has_localization())) {
+    AERROR << "gps1 and gps2 has no header or no some fields";
+    return false;
+  }
+  if (timestamp_sec - gps1.header().timestamp_sec() <
+      FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateGPS]: the given time stamp[" << timestamp_sec
+           << "] is older than the 1st message["
+           << gps1.header().timestamp_sec() << "]";
+    *gps_msg = gps1;
+  } else if (timestamp_sec - gps2.header().timestamp_sec() >
+             FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateGPS]: the given time stamp[" << timestamp_sec
+           << "] is newer than the 2nd message["
+           << gps2.header().timestamp_sec() << "]";
+    *gps_msg = gps1;
+  } else {
+    *gps_msg = gps1;
+    gps_msg->mutable_header()->set_timestamp_sec(timestamp_sec);
+
+    double time_diff =
+        gps2.header().timestamp_sec() - gps1.header().timestamp_sec();
+    if (fabs(time_diff) >= 0.001) {
+      double frac1 =
+          (timestamp_sec - gps1.header().timestamp_sec()) / time_diff;
+      const auto &gps1_pose = gps1.localization();
+      const auto &gps2_pose = gps2.localization();
+
+      if (gps1_pose.has_position() && gps2_pose.has_position()) {
+        auto val =
+            InterpolateXYZ(gps1_pose.position(), gps2_pose.position(), frac1);
+        gps_msg->mutable_localization()->mutable_position()->CopyFrom(val);
+      }
+
+      if (gps1_pose.has_orientation() && gps2_pose.has_orientation()) {
+        auto val = InterpolateXYZW(gps1_pose.orientation(),
+                                   gps2_pose.orientation(), frac1);
+        gps_msg->mutable_localization()->mutable_orientation()->CopyFrom(val);
+      }
+
+      if (gps1_pose.has_linear_velocity() && gps2_pose.has_linear_velocity()) {
+        auto val = InterpolateXYZ(gps1_pose.linear_velocity(),
+                                  gps2_pose.linear_velocity(), frac1);
+        gps_msg->mutable_localization()->mutable_linear_velocity()->CopyFrom(
+            val);
+      }
+    }
+  }
+  return true;
 }
 
 static bool InterpolateIMU(const CorrectedImu &imu1, const CorrectedImu &imu2,
@@ -177,6 +256,9 @@ LMDLocalization::~LMDLocalization() {}
 Status LMDLocalization::Start() {
   AdapterManager::Init(FLAGS_lmd_adapter_config_file);
 
+  // GPS
+  AdapterManager::AddGpsCallback(&LMDLocalization::OnGps, this);
+
   // Perception Obstacles
   AdapterManager::AddPerceptionObstaclesCallback(
       &LMDLocalization::OnPerceptionObstacles, this);
@@ -196,49 +278,23 @@ Status LMDLocalization::Stop() {
   return Status::OK();
 }
 
-void LMDLocalization::OnGps(const localization::Gps &gps) {
-  if (!gps.has_header() || !gps.header().has_timestamp_sec() ||
-      !gps.has_localization() || !gps.localization().has_position()) {
-    AERROR << "gps has no header or no some fields";
-    return;
-  }
+void LMDLocalization::OnGps(const Gps &gps) {
+  // take a snapshot of the current received messages
+  AdapterManager::Observe();
 
-  auto timestamp = gps.header().timestamp_sec();
-  const auto &pose = gps.localization();
-  if (!has_last_pose_ || last_pose_timestamp_sec_ < timestamp) {
+  // TODO(all): only for init
+  if (has_last_pose_) return;
+
+  Pose new_pose;
+  double new_timestamp_sec;
+  if (!GetGpsPose(gps, &new_pose, &new_timestamp_sec)) return;
+
+  if (!has_last_pose_ || last_pose_timestamp_sec_ < new_timestamp_sec) {
     if (!has_last_pose_) AINFO << "initialize pose";
-
-    Pose new_pose;
-
-    // position
-    // world frame -> map frame
-    new_pose.mutable_position()->set_x(pose.position().x() - map_offset_[0]);
-    new_pose.mutable_position()->set_y(pose.position().y() - map_offset_[1]);
-    new_pose.mutable_position()->set_z(pose.position().z() - map_offset_[2]);
-
-    // orientation
-    if (pose.has_orientation()) {
-      new_pose.mutable_orientation()->CopyFrom(pose.orientation());
-      auto heading =
-          QuaternionToHeading(pose.orientation().qw(), pose.orientation().qx(),
-                              pose.orientation().qy(), pose.orientation().qz());
-      new_pose.set_heading(heading);
-    }
-
-    // linear velocity
-    if (pose.has_linear_velocity())
-      new_pose.mutable_linear_velocity()->CopyFrom(pose.linear_velocity());
-
-    // IMU
-    CorrectedImu imu_msg;
-    if (!FindMatchingIMU(timestamp, &imu_msg)) return;
-    CHECK(imu_msg.has_imu());
-    const auto &imu = imu_msg.imu();
-    FillPoseFromImu(imu, &new_pose);
 
     has_last_pose_ = true;
     last_pose_.CopyFrom(new_pose);
-    last_pose_timestamp_sec_ = timestamp;
+    last_pose_timestamp_sec_ = new_timestamp_sec;
   }
 }
 
@@ -250,12 +306,15 @@ void LMDLocalization::OnPerceptionObstacles(
       return;
     }
 
-    auto timestamp = obstacles.header().timestamp_sec();
-    if (last_pose_timestamp_sec_ > timestamp) return;
+    // take a snapshot of the current received messages
+    AdapterManager::Observe();
+
+    auto timestamp_sec = obstacles.header().timestamp_sec();
+    if (last_pose_timestamp_sec_ > timestamp_sec) return;
 
     // predict pose
     Pose new_pose;
-    if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp,
+    if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp_sec,
                     &new_pose)) {
       AERROR << "Predict pose failed. ";
       return;
@@ -295,7 +354,7 @@ void LMDLocalization::OnPerceptionObstacles(
     new_pose.mutable_orientation()->set_qw(orientation.w());
 
     // linear velocity
-    auto dt = timestamp - last_pose_timestamp_sec_;
+    auto dt = timestamp_sec - last_pose_timestamp_sec_;
     const auto &last_position = last_pose_.position();
     new_pose.mutable_linear_velocity()->set_x(
         (position.x() - last_position.x()) / dt);
@@ -305,7 +364,7 @@ void LMDLocalization::OnPerceptionObstacles(
         (position.z() - last_position.z()) / dt);
 
     last_pose_.CopyFrom(new_pose);
-    last_pose_timestamp_sec_ = timestamp;
+    last_pose_timestamp_sec_ = timestamp_sec;
   }
 }
 
@@ -338,19 +397,63 @@ void LMDLocalization::PrepareLocalizationMsg(
 
   // predict pose
   Pose new_pose;
-  auto timestamp = localization->header().timestamp_sec();
-  if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp, &new_pose)) {
+  auto timestamp_sec = localization->header().timestamp_sec();
+  if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp_sec,
+                  &new_pose)) {
     AERROR << "Predict pose failed. ";
     return;
   }
   last_pose_ = new_pose;
-  last_pose_timestamp_sec_ = timestamp;
+  last_pose_timestamp_sec_ = timestamp_sec;
 
   // measurement_time
   localization->set_measurement_time(last_pose_timestamp_sec_);
 
   // pose
   localization->mutable_pose()->CopyFrom(last_pose_);
+
+  // print error
+  PrintPoseError(last_pose_, last_pose_timestamp_sec_);
+}
+
+bool LMDLocalization::GetGpsPose(const Gps &gps, Pose *pose,
+                                 double *timestamp_sec) {
+  if (!gps.has_header() || !gps.header().has_timestamp_sec() ||
+      !gps.has_localization() || !gps.localization().has_position()) {
+    AERROR << "gps has no header or no some fields";
+    return false;
+  }
+
+  *timestamp_sec = gps.header().timestamp_sec();
+  const auto &gps_pose = gps.localization();
+
+  // position
+  // world frame -> map frame
+  pose->mutable_position()->set_x(gps_pose.position().x() - map_offset_[0]);
+  pose->mutable_position()->set_y(gps_pose.position().y() - map_offset_[1]);
+  pose->mutable_position()->set_z(gps_pose.position().z() - map_offset_[2]);
+
+  // orientation
+  if (gps_pose.has_orientation()) {
+    pose->mutable_orientation()->CopyFrom(gps_pose.orientation());
+    auto heading = QuaternionToHeading(
+        gps_pose.orientation().qw(), gps_pose.orientation().qx(),
+        gps_pose.orientation().qy(), gps_pose.orientation().qz());
+    pose->set_heading(heading);
+  }
+
+  // linear velocity
+  if (gps_pose.has_linear_velocity())
+    pose->mutable_linear_velocity()->CopyFrom(gps_pose.linear_velocity());
+
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(*timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, pose);
+
+  return true;
 }
 
 bool LMDLocalization::PredictPose(const Pose &old_pose,
@@ -359,6 +462,62 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
   // TODO(all):
   new_pose->CopyFrom(old_pose);
 
+  return true;
+}
+
+bool LMDLocalization::FindMatchingGPS(double timestamp_sec, Gps *gps_msg) {
+  auto *gps_adapter = AdapterManager::GetGps();
+  if (gps_adapter->Empty()) {
+    AERROR << "Cannot find Matching GPS. "
+           << "GPS message Queue is empty! timestamp[" << timestamp_sec << "]";
+    return false;
+  }
+
+  // scan gps buffer, find first gps message that is newer than the given
+  // timestamp
+  GpsAdapter::Iterator gps_it = gps_adapter->begin();
+  for (; gps_it != gps_adapter->end(); ++gps_it) {
+    if ((*gps_it)->header().timestamp_sec() - timestamp_sec >
+        FLAGS_timestamp_sec_tolerance) {
+      break;
+    }
+  }
+
+  if (gps_it != gps_adapter->end()) {  // found one
+    if (gps_it == gps_adapter->begin()) {
+      AERROR << "Gps queue too short or request too old. "
+             << "Oldest timestamp["
+             << gps_adapter->GetOldestObserved().header().timestamp_sec()
+             << "], Newest timestamp["
+             << gps_adapter->GetLatestObserved().header().timestamp_sec()
+             << "], timestamp[" << timestamp_sec << "]";
+      *gps_msg = gps_adapter->GetOldestObserved();  // the oldest gps
+    } else {
+      // here is the normal case
+      auto gps_it_1 = gps_it;
+      gps_it_1--;
+      if (!(*gps_it)->has_header() || !(*gps_it_1)->has_header()) {
+        AERROR << "gps1 and gps_it_1 must both have header.";
+        return false;
+      }
+      if (!InterpolateGPS(**gps_it_1, **gps_it, timestamp_sec, gps_msg)) {
+        AERROR << "failed to interpolate GPS";
+        return false;
+      }
+    }
+  } else {
+    // give the newest gps, without extrapolation
+    *gps_msg = gps_adapter->GetLatestObserved();
+    if (gps_msg == nullptr) {
+      AERROR << "Fail to get latest observed gps_msg.";
+      return false;
+    }
+
+    if (!gps_msg->has_header()) {
+      AERROR << "gps_msg must have header.";
+      return false;
+    }
+  }
   return true;
 }
 
@@ -417,6 +576,39 @@ bool LMDLocalization::FindMatchingIMU(double timestamp_sec,
     }
   }
   return true;
+}
+
+void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
+  Gps gps;
+  if (!FindMatchingGPS(timestamp_sec, &gps)) return;
+
+  Pose gps_pose;
+  double t;
+  if (!GetGpsPose(gps, &gps_pose, &t)) return;
+
+  ADEBUG << "localization error, timestamp[" << timestamp_sec << "]";
+
+  if (pose.has_position() && gps_pose.has_position())
+    ADEBUG << "position error, x["
+           << pose.position().x() - gps_pose.position().x() << "], y["
+           << pose.position().y() - gps_pose.position().y() << "], z["
+           << pose.position().z() - gps_pose.position().z() << "]";
+
+  if (pose.has_orientation() && gps_pose.has_orientation())
+    ADEBUG << "orientation error, qx["
+           << pose.orientation().qx() - gps_pose.orientation().qx() << "], qy["
+           << pose.orientation().qy() - gps_pose.orientation().qy() << "], qz["
+           << pose.orientation().qz() - gps_pose.orientation().qz() << "], qw["
+           << pose.orientation().qw() - gps_pose.orientation().qw() << "]";
+
+  if (pose.has_linear_velocity() && gps_pose.has_linear_velocity())
+    ADEBUG << "linear velocity error, x["
+           << pose.linear_velocity().x() - gps_pose.linear_velocity().x()
+           << "], y["
+           << pose.linear_velocity().y() - gps_pose.linear_velocity().y()
+           << "], z["
+           << pose.linear_velocity().z() - gps_pose.linear_velocity().z()
+           << "]";
 }
 
 void LMDLocalization::RunWatchDog() {
