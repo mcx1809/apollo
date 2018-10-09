@@ -24,6 +24,8 @@
 
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "modules/common/proto/geometry.pb.h"
 
 #include "modules/localization/lmd/pc_map.h"
@@ -41,7 +43,7 @@ namespace localization {
  * @brief  Point used to match for points of map.
  */
 struct PCSourcePoint {
-  apollo::common::PointENU position;
+  apollo::common::Point3D position;
   apollo::common::Point3D direction;
   double curvature;
 };
@@ -65,16 +67,17 @@ class PCRegistrator {
    */
   void Register(const std::vector<PCSourcePoint>& source_points,
                 const apollo::common::PointENU& position_estimated,
-                double heading_estimated,
-                const apollo::common::PointENU* position, double* heading);
+                double heading_estimated, apollo::common::PointENU* position,
+                double* heading);
 
  private:
   double ComputeError(const std::vector<PCSourcePoint>& source_points,
-                      const apollo::common::PointENU& position_estimated,
-                      double heading_estimated);
+                      const apollo::common::PointENU& position, double heading);
 
  private:
   PCMap* map_;
+
+  FRIEND_TEST(PCRegistrator, ComputeError);
 };
 
 }  // namespace localization

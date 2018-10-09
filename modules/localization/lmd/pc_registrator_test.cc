@@ -15,3 +15,16 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/pc_registrator.h"
+
+#include "gtest/gtest.h"
+
+namespace apollo {
+namespace localization {
+
+using apollo::common::Point3D;
+using apollo::common::PointENU;
+
+TEST(PCRegistrator, ComputeError) {}
+
+}  // namespace localization
+}  // namespace apollo
