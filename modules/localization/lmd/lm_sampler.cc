@@ -74,7 +74,7 @@ int LMSampler::SamplingForOneLaneMarker(const LaneMarker& lane_marker) {
 }
 
 std::vector<PCSourcePoint> LMSampler::Sampling(
-    const apollo::perception::LaneMarkers& lane_markers) {
+    const LaneMarkers& lane_markers) {
   bool b_lanemarker = false;
   if (lane_markers.has_left_lane_marker()) {
     b_lanemarker = true;
