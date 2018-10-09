@@ -15,3 +15,46 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/lm_sampler.h"
+#include "gtest/gtest.h"
+namespace apollo {
+namespace localization {
+
+class LMSampleTest : public ::testing::Test {};
+
+TEST(LMSampleTest, SamplingForOneLaneMarker) {
+  apollo::perception::LaneMarker lane_marker;
+  lane_marker.set_c0_position(1.0);
+  lane_marker.set_c1_heading_angle(1.0);
+  lane_marker.set_c2_curvature(1.0);
+  lane_marker.set_c3_curvature_derivative(1.0);
+
+  apollo::perception::LaneMarkers lane_markers;
+  lane_markers.mutable_left_lane_marker()->CopyFrom(lane_marker);
+
+  LMSampler lm_sampler;
+  std::vector<PCSourcePoint> pc_sourcepoint = lm_sampler.Sampling(lane_markers);
+
+  double d_error_permit = 0.001;
+  EXPECT_NEAR(0.0, pc_sourcepoint[0].position.x(), d_error_permit);
+  EXPECT_NEAR(1.0, pc_sourcepoint[0].position.y(), d_error_permit);
+  EXPECT_NEAR(0.0, pc_sourcepoint[0].position.z(), d_error_permit);
+
+  EXPECT_NEAR(1.0, pc_sourcepoint[0].direction.x(), d_error_permit);
+  EXPECT_NEAR(3.0, pc_sourcepoint[0].direction.y(), d_error_permit);
+  EXPECT_NEAR(0.0, pc_sourcepoint[0].direction.z(), d_error_permit);
+
+  EXPECT_NEAR(0.0633, pc_sourcepoint[0].curvature, d_error_permit);
+
+  EXPECT_NEAR(0.5, pc_sourcepoint[5].position.x(), d_error_permit);
+  EXPECT_NEAR(1.875, pc_sourcepoint[5].position.y(), d_error_permit);
+  EXPECT_NEAR(0.0, pc_sourcepoint[5].position.z(), d_error_permit);
+
+  EXPECT_NEAR(1.0, pc_sourcepoint[5].direction.x(), d_error_permit);
+  EXPECT_NEAR(3.75, pc_sourcepoint[5].direction.y(), d_error_permit);
+  EXPECT_NEAR(0.0, pc_sourcepoint[5].direction.z(), d_error_permit);
+
+  EXPECT_NEAR(0.085531, pc_sourcepoint[5].curvature, d_error_permit);
+}
+
+}  // namespace localization
+}  // namespace apollo
