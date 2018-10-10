@@ -75,6 +75,8 @@ int LMSampler::SamplingForOneLaneMarker(const LaneMarker& lane_marker) {
 
 std::vector<PCSourcePoint> LMSampler::Sampling(
     const LaneMarkers& lane_markers) {
+  pc_sourcepoint_.clear();
+
   bool b_lanemarker = false;
   if (lane_markers.has_left_lane_marker()) {
     b_lanemarker = true;
@@ -87,13 +89,13 @@ std::vector<PCSourcePoint> LMSampler::Sampling(
     SamplingForOneLaneMarker(lanemarker);
   }
 
-  for (int i = 0; i < lane_markers.next_left_lane_marker_size(); i++) {
+  for (int i = 0; i < lane_markers.next_left_lane_marker_size(); ++i) {
     b_lanemarker = true;
     const auto& lanemarker = lane_markers.next_left_lane_marker(i);
     SamplingForOneLaneMarker(lanemarker);
   }
 
-  for (int i = 0; i < lane_markers.next_right_lane_marker_size(); i++) {
+  for (int i = 0; i < lane_markers.next_right_lane_marker_size(); ++i) {
     b_lanemarker = true;
     const auto& lanemarker = lane_markers.next_right_lane_marker(i);
     SamplingForOneLaneMarker(lanemarker);
