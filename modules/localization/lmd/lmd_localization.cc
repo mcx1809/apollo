@@ -18,6 +18,7 @@
 
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/log.h"
+#include "modules/common/math/math_utils.h"
 #include "modules/common/math/quaternion.h"
 #include "modules/localization/common/localization_gflags.h"
 
@@ -33,6 +34,7 @@ using apollo::common::adapter::ImuAdapter;
 using apollo::common::math::HeadingToQuaternion;
 using apollo::common::math::QuaternionRotate;
 using apollo::common::math::QuaternionToHeading;
+using apollo::common::math::RotateAxis;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::perception::PerceptionObstacles;
 
@@ -314,8 +316,8 @@ void LMDLocalization::OnPerceptionObstacles(
 
     // predict pose
     Pose new_pose;
-    if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp_sec,
-                    &new_pose)) {
+    if (!PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp_sec,
+                     &new_pose)) {
       AERROR << "Predict pose failed. ";
       return;
     }
@@ -338,6 +340,12 @@ void LMDLocalization::OnPerceptionObstacles(
     double heading;
     pc_registrator_.Register(source_points, position_estimated,
                              heading_estimated, &position, &heading);
+    ADEBUG << "before pc registration, x[" << position_estimated.x() << "], y["
+           << position_estimated.y() << "], z[" << position_estimated.z()
+           << "], heading[" << heading_estimated << "]";
+    ADEBUG << "after pc registration, x[" << position.x() << "], y["
+           << position.y() << "], z[" << position.z() << "], heading["
+           << heading << "]";
 
     // position
     // world frame -> map frame
@@ -395,12 +403,25 @@ void LMDLocalization::PrepareLocalizationMsg(
   AdapterManager::FillLocalizationHeader(FLAGS_localization_module_name,
                                          localization);
 
+  // set timestamp
+  auto *imu_adapter = AdapterManager::GetImu();
+  if (imu_adapter->Empty()) {
+    AERROR << "IMU message Queue is empty!";
+    return;
+  }
+  auto imu_msg = imu_adapter->GetLatestObserved();
+  if (!imu_msg.has_header() || !imu_msg.header().has_timestamp_sec()) {
+    AERROR << "imu has no header or no timestamp_sec in header";
+    return;
+  }
+  auto timestamp_sec =
+      std::max(imu_msg.header().timestamp_sec(), last_pose_timestamp_sec_);
+
   // predict pose
   Pose new_pose;
-  auto timestamp_sec = localization->header().timestamp_sec();
-  if (PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp_sec,
-                  &new_pose)) {
-    AERROR << "Predict pose failed. ";
+  if (!PredictPose(last_pose_, last_pose_timestamp_sec_, timestamp_sec,
+                   &new_pose)) {
+    AERROR << "Predict pose failed.";
     return;
   }
   last_pose_ = new_pose;
@@ -586,29 +607,33 @@ void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
   double t;
   if (!GetGpsPose(gps, &gps_pose, &t)) return;
 
+  if (!pose.has_position() || !gps_pose.has_position() ||
+      !pose.has_orientation() || !gps_pose.has_orientation() ||
+      !pose.has_linear_velocity() || !gps_pose.has_linear_velocity())
+    return;
+
   ADEBUG << "localization error, timestamp[" << timestamp_sec << "]";
 
-  if (pose.has_position() && gps_pose.has_position())
-    ADEBUG << "position error, x["
-           << pose.position().x() - gps_pose.position().x() << "], y["
-           << pose.position().y() - gps_pose.position().y() << "], z["
-           << pose.position().z() - gps_pose.position().z() << "]";
+  auto heading =
+      QuaternionToHeading(pose.orientation().qw(), pose.orientation().qx(),
+                          pose.orientation().qy(), pose.orientation().qz());
+  auto gps_heading = QuaternionToHeading(
+      gps_pose.orientation().qw(), gps_pose.orientation().qx(),
+      gps_pose.orientation().qy(), gps_pose.orientation().qz());
+  ADEBUG << "heading error, [" << heading - gps_heading << "]";
 
-  if (pose.has_orientation() && gps_pose.has_orientation())
-    ADEBUG << "orientation error, qx["
-           << pose.orientation().qx() - gps_pose.orientation().qx() << "], qy["
-           << pose.orientation().qy() - gps_pose.orientation().qy() << "], qz["
-           << pose.orientation().qz() - gps_pose.orientation().qz() << "], qw["
-           << pose.orientation().qw() - gps_pose.orientation().qw() << "]";
+  double flu_x, flu_y;
+  RotateAxis(gps_heading, pose.position().x() - gps_pose.position().x(),
+             pose.position().y() - gps_pose.position().y(), &flu_x, &flu_y);
+  ADEBUG << "station error, [" << flu_x << "]";
+  ADEBUG << "lateral error, [" << flu_y << "]";
 
-  if (pose.has_linear_velocity() && gps_pose.has_linear_velocity())
-    ADEBUG << "linear velocity error, x["
-           << pose.linear_velocity().x() - gps_pose.linear_velocity().x()
-           << "], y["
-           << pose.linear_velocity().y() - gps_pose.linear_velocity().y()
-           << "], z["
-           << pose.linear_velocity().z() - gps_pose.linear_velocity().z()
-           << "]";
+  double flu_vx, flu_vy;
+  RotateAxis(gps_heading, pose.linear_velocity().x() - gps_pose.position().x(),
+             pose.linear_velocity().y() - gps_pose.position().y(), &flu_vx,
+             &flu_vy);
+  ADEBUG << "velocity station error, [" << flu_x << "]";
+  ADEBUG << "velocity lateral error, [" << flu_y << "]";
 }
 
 void LMDLocalization::RunWatchDog() {

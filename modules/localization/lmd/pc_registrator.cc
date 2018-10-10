@@ -34,15 +34,15 @@ constexpr double kDirectionErrorRatio = 1.0;
 constexpr double kPositionXStep = 0.5;
 constexpr double kPositionYStep = 0.5;
 constexpr double kHeadingStep = 0.2;
-constexpr int kPositionXStepHalfCount = 4;
-constexpr int kPositionYStepHalfCount = 4;
-constexpr int kHeadingStepHalfCount = 4;
+constexpr int kPositionXStepHalfCount = 3;
+constexpr int kPositionYStepHalfCount = 3;
+constexpr int kHeadingStepHalfCount = 3;
 constexpr double kPositionXOptStepMin = 0.01;
 constexpr double kPositionYOptStepMin = 0.01;
 constexpr double kHeadingOptStepMin = 0.01;
-constexpr int kPositionXOptStepCount = 8;
-constexpr int kPositionYOptStepCount = 8;
-constexpr int kHeadingOptStepCount = 8;
+constexpr int kPositionXOptStepCount = 5;
+constexpr int kPositionYOptStepCount = 5;
+constexpr int kHeadingOptStepCount = 5;
 }  // namespace
 
 PCRegistrator::PCRegistrator(PCMap* map) {
