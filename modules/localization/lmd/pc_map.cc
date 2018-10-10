@@ -39,83 +39,72 @@ MapNode::~MapNode() {
   RemoveMapPoints(map_start_x_, map_start_y_, map_width_, map_height_);
 }
 
-void MapNode::InsertMapPoint(PCMapPoint* object) {
-  if (current_map_level_ == max_map_level_) {
-    points.push_back(object);
-    return;
-  }
-  if (IsContain(map_start_x_ + map_width_ / 2, map_start_y_, map_width_ / 2,
-                map_height_ / 2, object->position.x(), object->position.y())) {
-    if (!up_right)
-      up_right = new MapNode(map_start_x_ + map_width_ / 2, map_start_y_,
-                             map_width_ / 2, map_height_ / 2,
-                             current_map_level_ + 1, max_map_level_, this);
-    up_right->InsertMapPoint(object);
-    return;
-  } else if (IsContain(map_start_x_, map_start_y_, map_width_ / 2,
-                       map_height_ / 2, object->position.x(),
-                       object->position.y())) {
-    if (!up_left)
-      up_left = new MapNode(map_start_x_, map_start_y_, map_width_ / 2,
-                            map_height_ / 2, current_map_level_ + 1,
-                            max_map_level_, this);
-    up_left->InsertMapPoint(object);
-    return;
-  } else if (IsContain(map_start_x_, map_start_y_ + map_height_ / 2,
-                       map_width_ / 2, map_height_ / 2, object->position.x(),
-                       object->position.y())) {
-    if (!down_left)
-      down_left = new MapNode(map_start_x_, map_start_y_ + map_height_ / 2,
-                              map_width_ / 2, map_height_ / 2,
-                              current_map_level_ + 1, max_map_level_, this);
-    down_left->InsertMapPoint(object);
-    return;
-  } else if (IsContain(map_start_x_ + map_width_ / 2,
-                       map_start_y_ + map_height_ / 2, map_width_ / 2,
-                       map_height_ / 2, object->position.x(),
-                       object->position.y())) {
-    if (!down_right)
-      down_right = new MapNode(map_start_x_ + map_width_ / 2,
-                               map_start_y_ + map_height_ / 2, map_width_ / 2,
-                               map_height_ / 2, current_map_level_ + 1,
-                               max_map_level_, this);
-    down_right->InsertMapPoint(object);
-    return;
+void MapNode::InsertMapPoint(const PCMapPoint& map_point) {
+  if (IsContain(map_start_x_, map_start_y_, map_width_, map_height_,
+                map_point.position)) {
+    if (current_map_level_ == max_map_level_) {
+      points.push_back(map_point);
+      return;
+    }
+    if (IsContain(map_start_x_ + map_width_ / 2, map_start_y_, map_width_ / 2,
+                  map_height_ / 2, map_point.position)) {
+      if (!up_right)
+        up_right = new MapNode(map_start_x_ + map_width_ / 2, map_start_y_,
+                               map_width_ / 2, map_height_ / 2,
+                               current_map_level_ + 1, max_map_level_, this);
+      up_right->InsertMapPoint(map_point);
+    } else if (IsContain(map_start_x_, map_start_y_, map_width_ / 2,
+                         map_height_ / 2, map_point.position)) {
+      if (!up_left)
+        up_left = new MapNode(map_start_x_, map_start_y_, map_width_ / 2,
+                              map_height_ / 2, current_map_level_ + 1,
+                              max_map_level_, this);
+      up_left->InsertMapPoint(map_point);
+    } else if (IsContain(map_start_x_, map_start_y_ + map_height_ / 2,
+                         map_width_ / 2, map_height_ / 2, map_point.position)) {
+      if (!down_left)
+        down_left = new MapNode(map_start_x_, map_start_y_ + map_height_ / 2,
+                                map_width_ / 2, map_height_ / 2,
+                                current_map_level_ + 1, max_map_level_, this);
+      down_left->InsertMapPoint(map_point);
+    } else if (IsContain(map_start_x_ + map_width_ / 2,
+                         map_start_y_ + map_height_ / 2, map_width_ / 2,
+                         map_height_ / 2, map_point.position)) {
+      if (!down_right)
+        down_right = new MapNode(map_start_x_ + map_width_ / 2,
+                                 map_start_y_ + map_height_ / 2, map_width_ / 2,
+                                 map_height_ / 2, current_map_level_ + 1,
+                                 max_map_level_, this);
+      down_right->InsertMapPoint(map_point);
+    }
   }
 }
 
-void MapNode::RemoveMapPoints(float map_start_x, float map_start_y,
-                              float map_width, float map_height) {
-  if (IsContain(map_start_x, map_start_y, map_width, map_height, this)) {
-    if (current_map_level_ == max_map_level_) {
-      points.clear();
-      return;
-    }
+void MapNode::RemoveMapPoints(double map_start_x, double map_start_y,
+                              double map_width, double map_height) {
+  if (current_map_level_ == max_map_level_) {
+    points.clear();
+    return;
   }
-  if (up_right && IsContain(map_start_x_ + map_width_ / 2, map_start_y_,
-                            map_width_ / 2, map_height_ / 2, up_right)) {
+  if (up_right) {
     up_right->RemoveMapPoints(map_start_x_ + map_width_ / 2, map_start_y_,
                               map_width_ / 2, map_height_ / 2);
     delete up_right;
     up_right = nullptr;
   }
-  if (up_left && IsContain(map_start_x_, map_start_y_, map_width_ / 2,
-                           map_height_ / 2, up_left)) {
+  if (up_left) {
     up_left->RemoveMapPoints(map_start_x_, map_start_y_, map_width_ / 2,
                              map_height_ / 2);
     delete up_left;
     up_left = nullptr;
   }
-  if (down_left && IsContain(map_start_x_, map_start_y_ + map_height_ / 2,
-                             map_width_ / 2, map_height_ / 2, down_left)) {
+  if (down_left) {
     down_left->RemoveMapPoints(map_start_x_, map_start_y_ + map_height_ / 2,
                                map_width_ / 2, map_height_ / 2);
     delete down_left;
     down_left = nullptr;
   }
-  if (down_right &&
-      IsContain(map_start_x_ + map_width_ / 2, map_start_y_ + map_height_ / 2,
-                map_width_ / 2, map_height_ / 2, down_right)) {
+  if (down_right) {
     down_right->RemoveMapPoints(map_start_x_ + map_width_ / 2,
                                 map_start_y_ + map_height_ / 2, map_width_ / 2,
                                 map_height_ / 2);
@@ -124,48 +113,59 @@ void MapNode::RemoveMapPoints(float map_start_x, float map_start_y,
   }
 }
 
-std::list<PCMapPoint*> MapNode::GetMapPoints(float pos_x, float pos_y) {
-  std::list<PCMapPoint*> result;
+std::list<PCMapPoint> MapNode::GetMapPoints(
+    const apollo::common::PointENU& position) {
+  std::cout << "VVVVVVVVVVVVVVVVVVVVVV" << map_start_x_ << " " << map_start_y_
+            << " " << map_height_ << " " << map_height_ << " " << position.x()
+            << " " << position.y() << " " << current_map_level_ << " "
+            << max_map_level_ << std::endl;
+  std::cout << IsContain(map_start_x_ + map_width_ / 2, map_start_y_,
+                         map_width_ / 2, map_height_ / 2, position)
+            << " Contains in up_right " << std::endl;
+  std::cout << IsContain(map_start_x_, map_start_y_, map_width_ / 2,
+                         map_height_ / 2, position)
+            << " Contains in up_left" << std::endl;
+  std::cout << IsContain(map_start_x_, map_start_y_ + map_height_ / 2,
+                         map_width_ / 2, map_height_ / 2, position)
+            << " Contains in down_left" << std::endl;
+  std::cout << IsContain(map_start_x_ + map_width_ / 2,
+                         map_start_y_ + map_height_ / 2, map_width_ / 2,
+                         map_height_ / 2, position)
+            << " Contains in down_right" << std::endl;
   if (current_map_level_ == max_map_level_) {
-    result.insert(result.begin(), points.begin(), points.end());
-    return result;
+    std::cout << points.size() << " points in result list" << std::endl;
+    return points;
   }
-  if (up_right && IsContain(map_start_x_ + map_width_ / 2, map_start_y_,
-                            map_width_ / 2, map_height_ / 2, pos_x, pos_y)) {
-    return up_right->GetMapPoints(pos_x, pos_y);
+  if (up_right != nullptr &&
+      IsContain(map_start_x_ + map_width_ / 2, map_start_y_, map_width_ / 2,
+                map_height_ / 2, position)) {
+    up_right->GetMapPoints(position);
   }
-  if (up_left && IsContain(map_start_x_, map_start_y_, map_width_ / 2,
-                           map_height_ / 2, pos_x, pos_y)) {
-    return up_left->GetMapPoints(pos_x, pos_y);
+  if (up_left != nullptr &&
+      IsContain(map_start_x_, map_start_y_, map_width_ / 2, map_height_ / 2,
+                position)) {
+    up_left->GetMapPoints(position);
   }
-  if (down_left && IsContain(map_start_x_, map_start_y_ + map_height_ / 2,
-                             map_width_ / 2, map_height_ / 2, pos_x, pos_y)) {
-    return down_left->GetMapPoints(pos_x, pos_y);
+
+  if (down_left != nullptr &&
+      IsContain(map_start_x_, map_start_y_ + map_height_ / 2, map_width_ / 2,
+                map_height_ / 2, position)) {
+    down_left->GetMapPoints(position);
   }
-  if (down_right &&
+  if (down_right != nullptr &&
       IsContain(map_start_x_ + map_width_ / 2, map_start_y_ + map_height_ / 2,
-                map_width_ / 2, map_height_ / 2, pos_x, pos_y)) {
-    return down_right->GetMapPoints(pos_x, pos_y);
+                map_width_ / 2, map_height_ / 2, position)) {
+    down_right->GetMapPoints(position);
   }
-  return result;
 }
 
-bool MapNode::IsContain(float map_start_x, float map_start_y, float map_width,
-                        float map_height, MapNode* sub_node) const {
-  if ((sub_node->map_start_x_ >= map_start_x) &&
-      (sub_node->map_start_x_ + sub_node->map_width_ <=
-       (map_start_x + map_width)) &&
-      (sub_node->map_start_y_ >= map_start_y) &&
-      (sub_node->map_start_x_ + sub_node->map_height_ <=
-       map_start_y + map_width))
-    return true;
-  return false;
-}
-
-bool MapNode::IsContain(float map_start_x, float map_start_y, float map_width,
-                        float map_height, float pos_x, float pos_y) const {
-  if ((pos_x >= map_start_x) && (pos_x <= (map_start_x + map_width)) &&
-      (pos_y >= map_start_y) && (pos_y <= map_start_y + map_width))
+bool MapNode::IsContain(double map_start_x, double map_start_y,
+                        double map_width, double map_height,
+                        const apollo::common::PointENU& position) const {
+  if ((position.x() >= map_start_x) &&
+      (position.x() <= (map_start_x + map_width)) &&
+      (position.y() >= map_start_y) &&
+      (position.y() <= map_start_y + map_width))
     return true;
   return false;
 }
@@ -192,7 +192,7 @@ Status PCMap::UpdateRange(const PointENU& position, double radius) {
         auto lane_points = lane->points();
         for (int point_index = 0; point_index < lane_points.size();
              ++point_index) {
-          root->InsertMapPoint(new PCMapPoint(lane_points[point_index]));
+          root->InsertMapPoint(PCMapPoint(lane_points[point_index]));
         }
       }
     }
@@ -201,18 +201,17 @@ Status PCMap::UpdateRange(const PointENU& position, double radius) {
 }
 
 PCMapPoint* PCMap::GetNearestPoint(const PointENU& position) {
-  std::list<PCMapPoint*> point_list =
-      root->GetMapPoints(position.x(), position.y());
+  std::list<PCMapPoint> point_list = root->GetMapPoints(position);
   if (point_list.empty()) return nullptr;
-  std::list<PCMapPoint*>::iterator result_iter = point_list.begin();
-  for (std::list<PCMapPoint*>::iterator iter = point_list.begin();
+  std::list<PCMapPoint>::iterator result_iter = point_list.begin();
+  for (std::list<PCMapPoint>::iterator iter = point_list.begin();
        iter != point_list.end(); ++iter) {
-    if (provider_->CalculateDistance((*iter)->position, position) <
-        provider_->CalculateDistance((*result_iter)->position, position)) {
+    if (provider_->CalculateDistance((*iter).position, position) <
+        provider_->CalculateDistance((*result_iter).position, position)) {
       result_iter = iter;
     }
   }
-  return *result_iter;
+  return &(*result_iter);
 }
 
 }  // namespace localization

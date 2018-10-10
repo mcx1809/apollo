@@ -74,18 +74,17 @@ class MapNode {
 
  public:
   /**
-   * @brief  Insert PCMapPoint* to MapNode.
-   * @param object pointer to the PCMapPoint.
+   * @brief  Insert PCMapPoint to MapNode.
+   * @param map_point  PCMapPoint to insert.
    */
-  void InsertMapPoint(PCMapPoint* object);
+  void InsertMapPoint(const PCMapPoint& map_point);
 
   /**
-   * @brief  Get the PCMapPoint* list of samllest MapNode Range which contains
-   * (pos_x,pos_y).
-   * @param  pos_x The x value of point to search.
-   * @param  pos_y The y value of point to search.
+   * @brief  Get the PCMapPoint list of samllest MapNode Range which contains
+   * the nearest map points to the given position.
+   * @param  position The position to search
    */
-  std::list<PCMapPoint*> GetMapPoints(float pos_x, float pos_y);
+  std::list<PCMapPoint> GetMapPoints(const apollo::common::PointENU& position);
 
  private:
   /**
@@ -95,14 +94,12 @@ class MapNode {
    * @param  map_width   The width value of MapNode range.
    * @param  map_height  The height value of MapNode range.
    */
-  void RemoveMapPoints(float map_start_x, float map_start_y, float map_width,
-                       float map_height);
+  void RemoveMapPoints(double map_start_x, double map_start_y, double map_width,
+                       double map_height);
 
-  bool IsContain(float map_start_x, float map_start_y, float map_width,
-                 float map_height, MapNode* sub_node) const;
-
-  bool IsContain(float map_start_x, float map_start_y, float map_width,
-                 float map_height, float pos_x, float pos_y) const;
+  bool IsContain(double map_start_x, double map_start_y, double map_width,
+                 double map_height,
+                 const apollo::common::PointENU& position) const;
 
  private:
   double map_start_x_;
@@ -116,7 +113,7 @@ class MapNode {
   MapNode* up_left = nullptr;
   MapNode* down_left = nullptr;
   MapNode* down_right = nullptr;
-  std::list<PCMapPoint*> points;
+  std::list<PCMapPoint> points;
 };
 /**
  * @class PCMap
