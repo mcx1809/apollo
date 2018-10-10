@@ -135,7 +135,7 @@ def write_info(source_tuple, filename):
         left_c3_curvature_derivative = (source_tuple[0][obs_index].lane_marker
                                         .left_lane_marker.c3_curvature_derivative)
         for i in range(10):
-            point = lmd_left_lane_marker.marker_points.add()
+            point = lmd_left_lane_marker.points.add()
             location_offset = calculate_location_offset(- heading_value, i * 0.1, get_curve_value(
                 i * 0.1, left_c0_position, left_c1_heading_angle, left_c2_curvature,
                 left_c3_curvature_derivative))
@@ -146,7 +146,7 @@ def write_info(source_tuple, filename):
             point.direct.y = calculate_derivative(i * 0.1, left_c0_position, left_c1_heading_angle,
                                                   left_c2_curvature, left_c3_curvature_derivative)
             point.direct.z = 0
-            point.curve = calculate_curvity(i * 0.1, left_c0_position, left_c1_heading_angle,
+            point.curvature = calculate_curvity(i * 0.1, left_c0_position, left_c1_heading_angle,
                                             left_c2_curvature, left_c3_curvature_derivative)
         lmd_right_lane_marker = right_lane_marker_group.lane_marker.add()
         right_c0_position = (source_tuple[0][obs_index].lane_marker
@@ -158,7 +158,7 @@ def write_info(source_tuple, filename):
         right_c3_curvature_derivative = (source_tuple[0][obs_index].lane_marker
                                          .right_lane_marker.c3_curvature_derivative)
         for i in range(10):
-            point = lmd_right_lane_marker.marker_points.add()
+            point = lmd_right_lane_marker.points.add()
             location_offset = calculate_location_offset(- heading_value, i * 0.1, get_curve_value(
                 i * 0.1, right_c0_position, right_c1_heading_angle, right_c2_curvature,
                 right_c3_curvature_derivative))
@@ -169,7 +169,7 @@ def write_info(source_tuple, filename):
             point.direct.y = calculate_derivative(i * 0.1, right_c0_position, right_c1_heading_angle,
                                                   right_c2_curvature, right_c3_curvature_derivative)
             point.direct.z = 0
-            point.curve = calculate_curvity(i * 0.1, right_c0_position, right_c1_heading_angle,
+            point.curvature = calculate_curvity(i * 0.1, right_c0_position, right_c1_heading_angle,
                                             right_c2_curvature, right_c3_curvature_derivative)
     f.write(odometry_lane_markers_pack.SerializeToString())
     f.close()
