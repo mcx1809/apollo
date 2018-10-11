@@ -46,7 +46,7 @@ double LMSampler::calculate_curvity(double x_value, double c0, double c1,
 
 int LMSampler::SamplingForOneLaneMarker(const LaneMarker& lane_marker) {
   PCSourcePoint point;
-  for (int i = 0.0; i < 10; i++) {
+  for (int i = 0; i < 10; i++) {
     double x_value = 0.1 * i;
 
     point.position.set_x(x_value);
