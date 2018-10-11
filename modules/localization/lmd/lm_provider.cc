@@ -27,11 +27,11 @@ LMProvider::LMProvider() {
       << "Unable to get raw lanemarkers from file " << FLAGS_lmd_rawinput_file;
 }
 
-const int LMProvider::GetLaneMarkerPackSize() const {
+const int64_t LMProvider::GetLaneMarkerPackSize() const {
   return LaneMarkersPack_.lane_markers_size();
 }
 
-const int LMProvider::GetLaneMarkerSize(const int& pack_index) const {
+const int64_t LMProvider::GetLaneMarkerSize(const int64_t& pack_index) const {
   return LaneMarkersPack_.lane_markers(pack_index).lane_marker_size();
 }
 
@@ -43,18 +43,18 @@ double LMProvider::CalculateDistance(
   return distance;
 }
 
-const std::pair<int, int> LMProvider::FindNearestLaneMarkerIndex(
+const std::pair<int64_t, int64_t> LMProvider::FindNearestLaneMarkerIndex(
     const apollo::common::PointENU& position) const {
-  std::pair<int, int> result(std::numeric_limits<int>::max(),
-                             std::numeric_limits<int>::max());
+  std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
+                             std::numeric_limits<int64_t>::max());
   if (GetLaneMarkerPackSize() == 0) {
     AERROR << "Empty LaneMarkersPack from file " << FLAGS_lmd_rawinput_file;
     return result;
   }
   double distance = std::numeric_limits<double>::max();
-  for (int lane_mark_pack_index = 0;
+  for (int64_t lane_mark_pack_index = 0;
        lane_mark_pack_index < GetLaneMarkerPackSize(); lane_mark_pack_index++) {
-    for (int lane_marker_index = 0;
+    for (int64_t lane_marker_index = 0;
          lane_marker_index < GetLaneMarkerSize(lane_mark_pack_index);
          lane_marker_index++) {
       if (LaneMarkersPack_.lane_markers(lane_mark_pack_index)
@@ -65,7 +65,7 @@ const std::pair<int, int> LMProvider::FindNearestLaneMarkerIndex(
                << (lane_mark_pack_index);
         return result;
       }
-      for (int point_number = 0;
+      for (int64_t point_number = 0;
            point_number < LaneMarkersPack_.lane_markers(lane_mark_pack_index)
                               .lane_marker(lane_marker_index)
                               .points_size();
@@ -97,10 +97,10 @@ const std::pair<int, int> LMProvider::FindNearestLaneMarkerIndex(
   return result;
 }
 
-const std::pair<int, int> LMProvider::GetPrevLaneMarkerIndex(
-    const std::pair<int, int>& current_index) const {
-  std::pair<int, int> result(std::numeric_limits<int>::max(),
-                             std::numeric_limits<int>::max());
+const std::pair<int64_t, int64_t> LMProvider::GetPrevLaneMarkerIndex(
+    const std::pair<int64_t, int64_t>& current_index) const {
+  std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
+                             std::numeric_limits<int64_t>::max());
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second <= 0 ||
@@ -114,10 +114,10 @@ const std::pair<int, int> LMProvider::GetPrevLaneMarkerIndex(
   return result;
 }
 
-const std::pair<int, int> LMProvider::GetNextLaneMarkerIndex(
-    const std::pair<int, int>& current_index) const {
-  std::pair<int, int> result(std::numeric_limits<int>::max(),
-                             std::numeric_limits<int>::max());
+const std::pair<int64_t, int64_t> LMProvider::GetNextLaneMarkerIndex(
+    const std::pair<int64_t, int64_t>& current_index) const {
+  std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
+                             std::numeric_limits<int64_t>::max());
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second < 0 ||
@@ -131,10 +131,10 @@ const std::pair<int, int> LMProvider::GetNextLaneMarkerIndex(
   return result;
 }
 
-const std::pair<int, int> LMProvider::GetLeftLaneMarkerIndex(
-    const std::pair<int, int>& current_index) const {
-  std::pair<int, int> result(std::numeric_limits<int>::max(),
-                             std::numeric_limits<int>::max());
+const std::pair<int64_t, int64_t> LMProvider::GetLeftLaneMarkerIndex(
+    const std::pair<int64_t, int64_t>& current_index) const {
+  std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
+                             std::numeric_limits<int64_t>::max());
   if (current_index.first <= 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second < 0 ||
@@ -148,9 +148,9 @@ const std::pair<int, int> LMProvider::GetLeftLaneMarkerIndex(
   return result;
 }
 
-const std::pair<int, int> LMProvider::GetRightLaneMarkerIndex(
-    const std::pair<int, int>& current_index) const {
-  std::pair<int, int> result(std::numeric_limits<int>::max(),
+const std::pair<int64_t, int64_t> LMProvider::GetRightLaneMarkerIndex(
+    const std::pair<int64_t, int64_t>& current_index) const {
+  std::pair<int64_t, int64_t> result(std::numeric_limits<int>::max(),
                              std::numeric_limits<int>::max());
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() - 1 ||
@@ -166,7 +166,7 @@ const std::pair<int, int> LMProvider::GetRightLaneMarkerIndex(
 }
 
 const apollo::localization::OdometryLaneMarker* LMProvider::GetLaneMarker(
-    const std::pair<int, int>& current_index) const {
+    const std::pair<int64_t, int64_t>& current_index) const {
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second < 0 ||

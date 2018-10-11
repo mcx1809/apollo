@@ -48,7 +48,7 @@ class LMProvider {
    * @param position Specified position.
    * @return index pair of the nearest lane marker or max int pair
    */
-  const std::pair<int, int> FindNearestLaneMarkerIndex(
+  const std::pair<int64_t, int64_t> FindNearestLaneMarkerIndex(
       const apollo::common::PointENU& position) const;
 
   /**
@@ -56,32 +56,32 @@ class LMProvider {
    * @param current_index index pair of current lane marker.
    * @return index pair of prev lane marker or max int pair.
    */
-  const std::pair<int, int> GetPrevLaneMarkerIndex(
-      const std::pair<int, int>& current_index) const;
+  const std::pair<int64_t, int64_t> GetPrevLaneMarkerIndex(
+      const std::pair<int64_t, int64_t>& current_index) const;
 
   /**
    * @brief Get the index of next lane marker.
    * @param current_index index pair of current lane marker.
    * @return index pair of next lane marker or max int pair.
    */
-  const std::pair<int, int> GetNextLaneMarkerIndex(
-      const std::pair<int, int>& current_index) const;
+  const std::pair<int64_t, int64_t> GetNextLaneMarkerIndex(
+      const std::pair<int64_t, int64_t>& current_index) const;
 
   /**
    * @brief Get the index of left lane marker.
    * @param current_index index pair of current lane marker.
    * @return index pair of left lane marker or max int pair.
    */
-  const std::pair<int, int> GetLeftLaneMarkerIndex(
-      const std::pair<int, int>& current_index) const;
+  const std::pair<int64_t, int64_t> GetLeftLaneMarkerIndex(
+      const std::pair<int64_t, int64_t>& current_index) const;
 
   /**
    * @brief Get the index of right lane marker.
    * @param current_index index pair of current lane marker.
    * @return index pair of right lane marker or max int pair.
    */
-  const std::pair<int, int> GetRightLaneMarkerIndex(
-      const std::pair<int, int>& current_index) const;
+  const std::pair<int64_t, int64_t> GetRightLaneMarkerIndex(
+      const std::pair<int64_t, int64_t>& current_index) const;
 
   /**
    * @brief Get lane marker according to index pair.
@@ -89,19 +89,19 @@ class LMProvider {
    * @return A lane marker with the desired index pair or nullptr.
    */
   const apollo::localization::OdometryLaneMarker* GetLaneMarker(
-      const std::pair<int, int>& current_index) const;
+      const std::pair<int64_t, int64_t>& current_index) const;
 
   /**
    * @brief Get the lane marker pack size.
    * @return size of LaneMarkersPack_
    */
-  const int GetLaneMarkerPackSize() const;
+  const int64_t GetLaneMarkerPackSize() const;
 
   /**
    * @brief Get the lane marker size according to the given pack_index.
    * @return size of Lane Markers of the given pack_index
    */
-  const int GetLaneMarkerSize(const int& pack_index) const;
+  const int64_t GetLaneMarkerSize(const int64_t& pack_index) const;
 
   /**
    * @brief Calclute the distance from point position to the line of start_pos
