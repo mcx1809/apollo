@@ -35,6 +35,7 @@ TEST(PCMapTest, UpdateRange) {
   EXPECT_NEAR(683091.07878110325, nearest_point->position.x(), 0.01);
   EXPECT_NEAR(3110709.6351002883, nearest_point->position.y(), 0.01);
   EXPECT_NEAR(57.115288617161426, nearest_point->position.z(), 0.01);
+  delete map_;
 }
 }  // namespace localization
 }  // namespace apollo
