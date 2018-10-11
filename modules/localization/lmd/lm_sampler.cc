@@ -19,7 +19,8 @@
 namespace apollo {
 namespace localization {
 
-using namespace apollo::perception;
+using  apollo::perception::LaneMarkers;
+using  apollo::perception::LaneMarker;
 
 LMSampler::LMSampler() { pc_sourcepoint_.clear(); }
 
