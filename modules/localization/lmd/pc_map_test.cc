@@ -15,3 +15,26 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/pc_map.h"
+#include "gtest/gtest.h"
+namespace apollo {
+namespace localization {
+TEST(PCMapTest, UpdateRange) {
+  LMProvider* lm_provider_ = new LMProvider();
+  PCMap* map = new PCMap(lm_provider_);
+  apollo::common::PointENU position;
+  position.set_x(683092.86553);
+  position.set_y(3110710.00623);
+  position.set_z(66.24156);
+  apollo::common::PointENU search_point;
+  search_point.set_x(683091.66553);
+  search_point.set_y(3110709.20623);
+  search_point.set_z(66.24156);
+  map->UpdateRange(position, 16.0);
+  auto nearest_point = map->GetNearestPoint(search_point);
+  CHECK_NOTNULL(nearest_point);
+  EXPECT_DOUBLE_EQ(683091.07878110325, (nearest_point->position.x()));
+  EXPECT_DOUBLE_EQ(3110709.6351002883, (nearest_point->position.y()));
+  EXPECT_DOUBLE_EQ(57.115288617161426, (nearest_point->position.z()));
+}
+}  // namespace localization
+}  // namespace apollo
