@@ -20,7 +20,7 @@ namespace apollo {
 namespace localization {
 TEST(PCMapTest, UpdateRange) {
   LMProvider* lm_provider_ = new LMProvider();
-  PCMap* map = new PCMap(lm_provider_);
+  PCMap* map_ = new PCMap(lm_provider_);
   apollo::common::PointENU position;
   position.set_x(683092.86553);
   position.set_y(3110710.00623);
@@ -29,12 +29,12 @@ TEST(PCMapTest, UpdateRange) {
   search_point.set_x(683091.66553);
   search_point.set_y(3110709.20623);
   search_point.set_z(66.24156);
-  map->UpdateRange(position, 16.0);
-  auto nearest_point = map->GetNearestPoint(search_point);
-  CHECK_NOTNULL(nearest_point);
-  EXPECT_DOUBLE_EQ(683091.07878110325, (nearest_point->position.x()));
-  EXPECT_DOUBLE_EQ(3110709.6351002883, (nearest_point->position.y()));
-  EXPECT_DOUBLE_EQ(57.115288617161426, (nearest_point->position.z()));
+  map_->UpdateRange(position, 16.0);
+  auto nearest_point = map_->GetNearestPoint(search_point);
+  EXPECT_NE(nullptr, nearest_point);
+  EXPECT_NEAR(683091.07878110325, nearest_point->position.x(), 0.01);
+  EXPECT_NEAR(3110709.6351002883, nearest_point->position.y(), 0.01);
+  EXPECT_NEAR(57.115288617161426, nearest_point->position.z(), 0.01);
 }
 }  // namespace localization
 }  // namespace apollo

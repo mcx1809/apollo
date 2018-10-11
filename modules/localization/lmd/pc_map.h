@@ -68,8 +68,9 @@ class MapNode {
    * @param map_level     The max map level value
    * @param parent_ptr    The pointer to upper_level mapnode
    */
-  MapNode(double start_x, double start_y, double width, double height,
-          int current_level, int map_level, MapNode* parent_ptr = nullptr);
+  MapNode(const double start_x, const double start_y, const double width,
+          const double height, const int current_level, const int map_level,
+          const MapNode* parent_ptr = nullptr);
   ~MapNode();
 
  public:
@@ -84,7 +85,8 @@ class MapNode {
    * the nearest map points to the given position.
    * @param  position The position to search
    */
-  std::list<PCMapPoint> GetMapPoints(const apollo::common::PointENU& position);
+  std::list<PCMapPoint> GetMapPoints(
+      const apollo::common::PointENU& position) const;
 
  private:
   /**
@@ -94,11 +96,11 @@ class MapNode {
    * @param  map_width   The width value of MapNode range.
    * @param  map_height  The height value of MapNode range.
    */
-  void RemoveMapPoints(double map_start_x, double map_start_y, double map_width,
-                       double map_height);
+  void RemoveMapPoints(const double map_start_x, const double map_start_y,
+                       const double map_width, const double map_height);
 
-  bool IsContain(double map_start_x, double map_start_y, double map_width,
-                 double map_height,
+  bool IsContain(const double map_start_x, const double map_start_y,
+                 const double map_width, const double map_height,
                  const apollo::common::PointENU& position) const;
 
  private:
@@ -108,12 +110,12 @@ class MapNode {
   double map_height_;
   int current_map_level_;
   int max_map_level_;
-  MapNode* parent;
-  MapNode* up_right = nullptr;
-  MapNode* up_left = nullptr;
-  MapNode* down_left = nullptr;
-  MapNode* down_right = nullptr;
-  std::list<PCMapPoint> points;
+  const MapNode* parent_;
+  MapNode* up_right_ = nullptr;
+  MapNode* up_left_ = nullptr;
+  MapNode* down_left_ = nullptr;
+  MapNode* down_right_ = nullptr;
+  std::list<PCMapPoint> points_;
 };
 /**
  * @class PCMap
@@ -131,7 +133,7 @@ class PCMap {
    * @return Status::OK() if a suitable speed-data is created; error otherwise.
    */
   apollo::common::Status UpdateRange(const apollo::common::PointENU& position,
-                                     double radius);
+                                     const double radius);
 
   /**
    * @brief  Find the nearest point in lane_marker according to the given
@@ -139,11 +141,11 @@ class PCMap {
    * @param position The given position.
    * @return The nearest point in lane_marker or nullptr.
    */
-  PCMapPoint* GetNearestPoint(const apollo::common::PointENU& position);
+  PCMapPoint* GetNearestPoint(const apollo::common::PointENU& position) const;
 
  private:
   LMProvider* provider_;
-  MapNode* root = nullptr;
+  MapNode* root_ = nullptr;
 };
 
 }  // namespace localization

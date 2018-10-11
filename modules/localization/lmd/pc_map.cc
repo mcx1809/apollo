@@ -25,15 +25,16 @@ using apollo::common::Point3D;
 using apollo::common::PointENU;
 using apollo::common::Status;
 
-MapNode::MapNode(double start_x, double start_y, double width, double height,
-                 int current_level, int map_level, MapNode* parent_ptr)
+MapNode::MapNode(const double start_x, const double start_y, const double width,
+                 const double height, const int current_level,
+                 const int map_level, const MapNode* parent_ptr)
     : map_start_x_(start_x),
       map_start_y_(start_y),
       map_width_(width),
       map_height_(height),
       current_map_level_(current_level),
       max_map_level_(map_level),
-      parent(parent_ptr) {}
+      parent_(parent_ptr) {}
 
 MapNode::~MapNode() {
   RemoveMapPoints(map_start_x_, map_start_y_, map_width_, map_height_);
@@ -43,112 +44,113 @@ void MapNode::InsertMapPoint(const PCMapPoint& map_point) {
   if (IsContain(map_start_x_, map_start_y_, map_width_, map_height_,
                 map_point.position)) {
     if (current_map_level_ == max_map_level_) {
-      points.push_back(map_point);
+      points_.push_back(map_point);
       return;
     }
     if (IsContain(map_start_x_ + map_width_ / 2, map_start_y_, map_width_ / 2,
                   map_height_ / 2, map_point.position)) {
-      if (!up_right)
-        up_right = new MapNode(map_start_x_ + map_width_ / 2, map_start_y_,
+      if (!up_right_)
+        up_right_ = new MapNode(map_start_x_ + map_width_ / 2, map_start_y_,
                                map_width_ / 2, map_height_ / 2,
                                current_map_level_ + 1, max_map_level_, this);
-      return up_right->InsertMapPoint(map_point);
+      return up_right_->InsertMapPoint(map_point);
     }
     if (IsContain(map_start_x_, map_start_y_, map_width_ / 2, map_height_ / 2,
                   map_point.position)) {
-      if (!up_left)
-        up_left = new MapNode(map_start_x_, map_start_y_, map_width_ / 2,
+      if (!up_left_)
+        up_left_ = new MapNode(map_start_x_, map_start_y_, map_width_ / 2,
                               map_height_ / 2, current_map_level_ + 1,
                               max_map_level_, this);
-      return up_left->InsertMapPoint(map_point);
+      return up_left_->InsertMapPoint(map_point);
     }
     if (IsContain(map_start_x_, map_start_y_ + map_height_ / 2, map_width_ / 2,
                   map_height_ / 2, map_point.position)) {
-      if (!down_left)
-        down_left = new MapNode(map_start_x_, map_start_y_ + map_height_ / 2,
+      if (!down_left_)
+        down_left_ = new MapNode(map_start_x_, map_start_y_ + map_height_ / 2,
                                 map_width_ / 2, map_height_ / 2,
                                 current_map_level_ + 1, max_map_level_, this);
-      return down_left->InsertMapPoint(map_point);
+      return down_left_->InsertMapPoint(map_point);
     }
     if (IsContain(map_start_x_ + map_width_ / 2, map_start_y_ + map_height_ / 2,
                   map_width_ / 2, map_height_ / 2, map_point.position)) {
-      if (!down_right)
-        down_right = new MapNode(map_start_x_ + map_width_ / 2,
+      if (!down_right_)
+        down_right_ = new MapNode(map_start_x_ + map_width_ / 2,
                                  map_start_y_ + map_height_ / 2, map_width_ / 2,
                                  map_height_ / 2, current_map_level_ + 1,
                                  max_map_level_, this);
-      return down_right->InsertMapPoint(map_point);
+      return down_right_->InsertMapPoint(map_point);
     }
   }
 }
 
-void MapNode::RemoveMapPoints(double map_start_x, double map_start_y,
-                              double map_width, double map_height) {
+void MapNode::RemoveMapPoints(const double map_start_x,
+                              const double map_start_y, const double map_width,
+                              const double map_height) {
   if (current_map_level_ == max_map_level_) {
-    points.clear();
+    points_.clear();
     return;
   }
-  if (up_right) {
-    return up_right->RemoveMapPoints(
-        up_right->map_start_x_, up_right->map_start_y_, up_right->map_width_,
-        up_right->map_height_);
-    delete up_right;
-    up_right = nullptr;
+  if (up_right_) {
+    return up_right_->RemoveMapPoints(
+        up_right_->map_start_x_, up_right_->map_start_y_, up_right_->map_width_,
+        up_right_->map_height_);
+    delete up_right_;
+    up_right_= nullptr;
   }
-  if (up_left) {
-    return up_left->RemoveMapPoints(up_left->map_start_x_,
-                                    up_left->map_start_y_, up_left->map_width_,
-                                    up_left->map_height_);
-    delete up_left;
-    up_left = nullptr;
+  if (up_left_) {
+    return up_left_->RemoveMapPoints(up_left_->map_start_x_,
+                                    up_left_->map_start_y_, up_left_->map_width_,
+                                    up_left_->map_height_);
+    delete up_left_;
+    up_left_ = nullptr;
   }
-  if (down_left) {
-    return down_left->RemoveMapPoints(
-        down_left->map_start_x_, down_left->map_start_y_, down_left->map_width_,
-        down_left->map_height_);
-    delete down_left;
-    down_left = nullptr;
+  if (down_left_) {
+    return down_left_->RemoveMapPoints(
+        down_left_->map_start_x_, down_left_->map_start_y_, down_left_->map_width_,
+        down_left_->map_height_);
+    delete down_left_;
+    down_left_ = nullptr;
   }
-  if (down_right) {
-    return down_right->RemoveMapPoints(
-        down_right->map_start_x_, down_right->map_start_y_,
-        down_right->map_width_, down_right->map_height_);
-    delete down_right;
-    down_right = nullptr;
+  if (down_right_) {
+    return down_right_->RemoveMapPoints(
+        down_right_->map_start_x_, down_right_->map_start_y_,
+        down_right_->map_width_, down_right_->map_height_);
+    delete down_right_;
+    down_right_ = nullptr;
   }
 }
 
 std::list<PCMapPoint> MapNode::GetMapPoints(
-    const apollo::common::PointENU& position) {
-  if (up_right != nullptr &&
-      IsContain(up_right->map_start_x_, up_right->map_start_y_,
-                up_right->map_width_, up_right->map_height_, position)) {
-    return up_right->GetMapPoints(position);
+    const apollo::common::PointENU& position) const {
+  if (up_right_ != nullptr &&
+      IsContain(up_right_->map_start_x_, up_right_->map_start_y_,
+                up_right_->map_width_, up_right_->map_height_, position)) {
+    return up_right_->GetMapPoints(position);
   }
-  if (up_left != nullptr &&
-      IsContain(up_left->map_start_x_, up_left->map_start_y_,
-                up_left->map_width_, up_left->map_height_, position)) {
-    return up_left->GetMapPoints(position);
+  if (up_left_ != nullptr &&
+      IsContain(up_left_->map_start_x_, up_left_->map_start_y_,
+                up_left_->map_width_, up_left_->map_height_, position)) {
+    return up_left_->GetMapPoints(position);
   }
-  if (down_left != nullptr &&
-      IsContain(down_left->map_start_x_, down_left->map_start_y_,
-                down_left->map_width_, down_left->map_height_, position)) {
-    return down_left->GetMapPoints(position);
+  if (down_left_ != nullptr &&
+      IsContain(down_left_->map_start_x_, down_left_->map_start_y_,
+                down_left_->map_width_, down_left_->map_height_, position)) {
+    return down_left_->GetMapPoints(position);
   }
-  if (down_right != nullptr &&
-      IsContain(down_right->map_start_x_, down_right->map_start_y_,
-                down_right->map_width_, down_right->map_height_, position)) {
-    return down_right->GetMapPoints(position);
+  if (down_right_ != nullptr &&
+      IsContain(down_right_->map_start_x_, down_right_->map_start_y_,
+                down_right_->map_width_, down_right_->map_height_, position)) {
+    return down_right_->GetMapPoints(position);
   }
   std::list<PCMapPoint> result;
   if (current_map_level_ == max_map_level_) {
-    result.insert(result.begin(), points.begin(), points.end());
+    result.insert(result.begin(), points_.begin(), points_.end());
   }
   return result;
 }
 
-bool MapNode::IsContain(double map_start_x, double map_start_y,
-                        double map_width, double map_height,
+bool MapNode::IsContain(const double map_start_x, const double map_start_y,
+                        const double map_width, const double map_height,
                         const apollo::common::PointENU& position) const {
   if ((position.x() >= map_start_x) &&
       (position.x() <= (map_start_x + map_width)) &&
@@ -163,13 +165,13 @@ PCMap::PCMap(LMProvider* provider) {
   provider_ = provider;
 }
 
-Status PCMap::UpdateRange(const PointENU& position, double radius) {
-  if (root != nullptr) {
-    delete root;
-    root = nullptr;
+Status PCMap::UpdateRange(const PointENU& position, const double radius) {
+  if (root_ != nullptr) {
+    delete root_;
+    root_ = nullptr;
   }
-  root = new MapNode(position.x() - radius / 2, position.y() - radius / 2,
-                     radius, radius, 1, 5, nullptr);
+  root_ = new MapNode(position.x() - radius / 2, position.y() - radius / 2,
+                      radius, radius, 1, 5, nullptr);
   for (int pack_index = 0; pack_index < provider_->GetLaneMarkerPackSize();
        ++pack_index) {
     for (int lane_index = 0;
@@ -180,7 +182,7 @@ Status PCMap::UpdateRange(const PointENU& position, double radius) {
         auto lane_points = lane->points();
         for (int point_index = 0; point_index < lane_points.size();
              ++point_index) {
-          root->InsertMapPoint(PCMapPoint(lane_points[point_index]));
+          root_->InsertMapPoint(PCMapPoint(lane_points[point_index]));
         }
       }
     }
@@ -188,8 +190,8 @@ Status PCMap::UpdateRange(const PointENU& position, double radius) {
   return Status::OK();
 }
 
-PCMapPoint* PCMap::GetNearestPoint(const PointENU& position) {
-  std::list<PCMapPoint> point_list = root->GetMapPoints(position);
+PCMapPoint* PCMap::GetNearestPoint(const PointENU& position) const {
+  std::list<PCMapPoint> point_list = root_->GetMapPoints(position);
   if (point_list.empty()) return nullptr;
   std::list<PCMapPoint>::iterator result_iter = point_list.begin();
   for (std::list<PCMapPoint>::iterator iter = point_list.begin();
