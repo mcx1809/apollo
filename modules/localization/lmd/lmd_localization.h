@@ -22,6 +22,7 @@
 #ifndef MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
 #define MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <utility>

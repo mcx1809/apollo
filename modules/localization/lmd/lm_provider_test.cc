@@ -56,7 +56,7 @@ TEST(LMProviderTest, FindNearestLaneMarkerIndex) {
   const std::pair<int64_t, int64_t>& result_index =
       lm_provider_->FindNearestLaneMarkerIndex(position);
   EXPECT_EQ(1, result_index.first);
-  EXPECT_EQ(1126, result_index.second);
+  EXPECT_EQ(514, result_index.second);
   delete lm_provider_;
 }
 
@@ -73,7 +73,7 @@ TEST(LMProviderTest, GetPrevLaneMarkerIndex) {
   EXPECT_EQ(prev_index.first, nearest_index.first);
   EXPECT_EQ(prev_index.second, nearest_index.second - 1);
   EXPECT_EQ(1, prev_index.first);
-  EXPECT_EQ(1125, prev_index.second);
+  EXPECT_EQ(513, prev_index.second);
   delete lm_provider_;
 }
 
@@ -90,7 +90,7 @@ TEST(LMProviderTest, GetNextLaneMarkerIndex) {
   EXPECT_EQ(next_index.first, nearest_index.first);
   EXPECT_EQ(next_index.second, nearest_index.second + 1);
   EXPECT_EQ(1, next_index.first);
-  EXPECT_EQ(1127, next_index.second);
+  EXPECT_EQ(515, next_index.second);
   delete lm_provider_;
 }
 
@@ -107,7 +107,7 @@ TEST(LMProviderTest, GetLeftLaneMarkerIndex) {
   EXPECT_EQ(left_index.first, nearest_index.first - 1);
   EXPECT_EQ(left_index.second, nearest_index.second);
   EXPECT_EQ(0, left_index.first);
-  EXPECT_EQ(1126, left_index.second);
+  EXPECT_EQ(514, left_index.second);
   delete lm_provider_;
 }
 
@@ -130,9 +130,9 @@ TEST(LMProviderTest, GetRightLaneMarkerIndex) {
   EXPECT_EQ(right_index.first, nearest_index.first);
   EXPECT_EQ(right_index.second, nearest_index.second);
   EXPECT_EQ(0, index.first);
-  EXPECT_EQ(1126, index.second);
+  EXPECT_EQ(514, index.second);
   EXPECT_EQ(1, right_index.first);
-  EXPECT_EQ(1126, right_index.second);
+  EXPECT_EQ(514, right_index.second);
   delete lm_provider_;
 }
 
@@ -151,10 +151,9 @@ TEST(LMProviderTest, GetLaneMarker) {
     EXPECT_EQ(1, lane_marker->points(index).direct().x());
     EXPECT_EQ(0, lane_marker->points(index).direct().z());
   }
-  EXPECT_DOUBLE_EQ(683094.82904500933, lane_marker->points(0).position().x());
-  EXPECT_DOUBLE_EQ(3110714.5319600403, lane_marker->points(0).position().y());
-  EXPECT_DOUBLE_EQ(57.115284788987609, lane_marker->points(0).position().z());
-
+  EXPECT_NEAR(682377.2518249487, lane_marker->points(0).position().x(), 0.01);
+  EXPECT_NEAR(3111284.2039481895, lane_marker->points(0).position().y(), 0.01);
+  EXPECT_NEAR(66.241558944806457, lane_marker->points(0).position().z(), 0.01);
   delete lm_provider_;
 }
 }  // namespace localization

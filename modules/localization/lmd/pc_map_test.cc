@@ -32,9 +32,9 @@ TEST(PCMapTest, UpdateRange) {
   map_->UpdateRange(position, 16.0);
   auto nearest_point = map_->GetNearestPoint(search_point);
   EXPECT_NE(nullptr, nearest_point);
-  EXPECT_NEAR(683091.07878110325, nearest_point->position.x(), 0.01);
-  EXPECT_NEAR(3110709.6351002883, nearest_point->position.y(), 0.01);
-  EXPECT_NEAR(57.115288617161426, nearest_point->position.z(), 0.01);
+  EXPECT_NEAR(683091.4953686368, nearest_point->position.x(), 0.01);
+  EXPECT_NEAR(3110708.6346883234, nearest_point->position.y(), 0.01);
+  EXPECT_NEAR(57.135340886190534, nearest_point->position.z(), 0.01);
   delete map_;
 }
 }  // namespace localization

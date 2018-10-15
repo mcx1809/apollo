@@ -21,15 +21,17 @@
 
 #ifndef MODULES_LOCALIZATION_LMD_PC_MAP_H_
 #define MODULES_LOCALIZATION_LMD_PC_MAP_H_
-
 #include <iterator>
 #include <list>
 #include <utility>
+#include <vector>
 
 #include "modules/common/proto/geometry.pb.h"
-
 #include "modules/common/status/status.h"
 #include "modules/localization/lmd/lm_provider.h"
+
+#include "pcl/kdtree/kdtree_flann.h"
+#include "pcl/point_cloud.h"
 
 /**
  * @namespace apollo::localization
@@ -56,67 +58,6 @@ struct PCMapPoint {
   }
 };
 
-class MapNode {
- public:
-  /**
-   * @brief  Construct map_node according to the given params.
-   * @param start_x The x value of upper_left point.
-   * @param start_y The y value of upper_left point.
-   * @param width   The width value
-   * @param height  The height value
-   * @param current_level The current map level value
-   * @param map_level     The max map level value
-   * @param parent_ptr    The pointer to upper_level mapnode
-   */
-  MapNode(const double start_x, const double start_y, const double width,
-          const double height, const int current_level, const int map_level,
-          const MapNode* parent_ptr = nullptr);
-  ~MapNode();
-
- public:
-  /**
-   * @brief  Insert PCMapPoint to MapNode.
-   * @param map_point  PCMapPoint to insert.
-   */
-  void InsertMapPoint(const PCMapPoint& map_point);
-
-  /**
-   * @brief  Get the PCMapPoint list of samllest MapNode Range which contains
-   * the nearest map points to the given position.
-   * @param  position The position to search
-   */
-  std::list<PCMapPoint> GetMapPoints(
-      const apollo::common::PointENU& position) const;
-
- private:
-  /**
-   * @brief  Remove all PCMapPoint* in MapNode range.
-   * @param  map_start_x The x value of upper_left point of MapNode range.
-   * @param  map_start_y The y value of upper_left point of MapNode range.
-   * @param  map_width   The width value of MapNode range.
-   * @param  map_height  The height value of MapNode range.
-   */
-  void RemoveMapPoints(const double map_start_x, const double map_start_y,
-                       const double map_width, const double map_height);
-
-  bool IsContain(const double map_start_x, const double map_start_y,
-                 const double map_width, const double map_height,
-                 const apollo::common::PointENU& position) const;
-
- private:
-  double map_start_x_;
-  double map_start_y_;
-  double map_width_;
-  double map_height_;
-  int current_map_level_;
-  int max_map_level_;
-  const MapNode* parent_;
-  MapNode* up_right_ = nullptr;
-  MapNode* up_left_ = nullptr;
-  MapNode* down_left_ = nullptr;
-  MapNode* down_right_ = nullptr;
-  std::list<PCMapPoint> points_;
-};
 /**
  * @class PCMap
  *
@@ -125,7 +66,7 @@ class MapNode {
 class PCMap {
  public:
   explicit PCMap(LMProvider* provider);
-
+  ~PCMap();
   /**
    * @brief  Update map for range.
    * @param position The position of center point.
@@ -145,7 +86,8 @@ class PCMap {
 
  private:
   LMProvider* provider_;
-  MapNode* root_ = nullptr;
+  pcl::KdTreeFLANN<pcl::PointXYZ> kd_tree_;
+  std::vector<PCMapPoint*> point_cloud_;
 };
 
 }  // namespace localization

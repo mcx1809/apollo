@@ -32,6 +32,7 @@ cc_library(
         "//modules/localization/proto:odometry_lane_marker_proto",
         "@gtest",
         "@ros//:ros_common",
+        "@pcl//:pcl",
     ],
 )
 
@@ -52,6 +53,7 @@ cc_test(
         "//modules/common/util",
         "//modules/localization/lmd:lmd_localization",
         "@gtest//:main",
+        "@pcl//:pcl",
     ],
 )
 
