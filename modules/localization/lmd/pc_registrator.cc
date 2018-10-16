@@ -16,9 +16,11 @@
 
 #include "modules/localization/lmd/pc_registrator.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "modules/common/log.h"
+#include "modules/common/math/line_segment2d.h"
 #include "modules/common/math/math_utils.h"
 
 namespace apollo {
@@ -26,23 +28,20 @@ namespace localization {
 
 using apollo::common::Point3D;
 using apollo::common::PointENU;
+using apollo::common::math::LineSegment2d;
 using apollo::common::math::RotateAxis;
+using apollo::common::math::Vec2d;
 
 namespace {
-constexpr double kDistanceErrorRatio = 1.0;
-constexpr double kDirectionErrorRatio = 1.0;
-constexpr double kPositionXStep = 0.5;
-constexpr double kPositionYStep = 0.5;
-constexpr double kHeadingStep = 0.2;
-constexpr int kPositionXStepHalfCount = 3;
-constexpr int kPositionYStepHalfCount = 3;
-constexpr int kHeadingStepHalfCount = 3;
-constexpr double kPositionXOptStepMin = 0.01;
-constexpr double kPositionYOptStepMin = 0.01;
-constexpr double kHeadingOptStepMin = 0.01;
-constexpr int kPositionXOptStepCount = 5;
-constexpr int kPositionYOptStepCount = 5;
-constexpr int kHeadingOptStepCount = 5;
+constexpr double kHeadingOptRange = M_PI * 0.75;
+constexpr double kXOptRange = 3.0;
+constexpr double kYOptRange = 3.0;
+constexpr int kHeadingOptRatio = 6;
+constexpr int kXOptRatio = 6;
+constexpr int kYOptRatio = 6;
+constexpr int kOptIterNum = 4;
+constexpr double kNotFoundError = 20.0;
+constexpr double kMovingCostRatio = 0.25;
 }  // namespace
 
 PCRegistrator::PCRegistrator(PCMap* map) {
@@ -53,97 +52,82 @@ PCRegistrator::PCRegistrator(PCMap* map) {
 void PCRegistrator::Register(const std::vector<PCSourcePoint>& source_points,
                              const PointENU& position_estimated,
                              double heading_estimated, PointENU* position,
-                             double* heading) {
+                             double* heading) const {
   CHECK(position_estimated.has_x());
   CHECK(position_estimated.has_y());
   CHECK_NOTNULL(position);
   CHECK_NOTNULL(heading);
 
-  // find the near position and heading
   auto current_error = std::numeric_limits<double>::max();
   position->CopyFrom(position_estimated);
   *heading = heading_estimated;
-  for (int i = -kHeadingStepHalfCount; i <= kHeadingStepHalfCount; ++i) {
-    for (int j = -kPositionXStepHalfCount; j <= kPositionXStepHalfCount; ++j) {
-      for (int k = -kPositionYStepHalfCount; k <= kPositionYStepHalfCount;
-           ++k) {
-        auto heading_testing = heading_estimated + i * kHeadingStep;
-        PointENU position_testing;
-        position_testing.set_x(position_estimated.x() + j * kPositionXStep);
-        position_testing.set_y(position_estimated.y() + j * kPositionYStep);
-        auto error =
-            ComputeError(source_points, position_testing, heading_testing);
-        if (error < current_error) {
-          current_error = error;
-          position->CopyFrom(position_testing);
-          *heading = heading_testing;
+
+  // find the near position and heading func
+  auto find_near = [&](double heading_lower, double heading_upper,
+                       double heading_step, double x_lower, double x_upper,
+                       double x_step, double y_lower, double y_upper,
+                       double y_step) {
+    for (auto heading_testing = heading_lower; heading_testing <= heading_upper;
+         heading_testing += heading_step) {
+      for (auto x_testing = x_lower; x_testing <= x_upper;
+           x_testing += x_step) {
+        for (auto y_testing = y_lower; y_testing <= y_upper;
+             y_testing += y_step) {
+          PointENU position_testing;
+          position_testing.set_x(x_testing);
+          position_testing.set_y(y_testing);
+          position_testing.set_z(position->z());
+          auto error =
+              ComputeError(source_points, position_testing, heading_testing);
+
+          error += Vec2d(position_estimated.x(), position_estimated.y())
+                       .DistanceSquareTo(
+                           Vec2d(position_testing.x(), position_testing.y())) *
+                   kMovingCostRatio;
+
+          if (error < current_error) {
+            current_error = error;
+            position->CopyFrom(position_testing);
+            *heading = heading_testing;
+          }
         }
       }
     }
+  };
+
+  auto heading_range = kHeadingOptRange;
+  auto x_range = kXOptRange;
+  auto y_range = kYOptRange;
+  auto heading_step_ratio = kHeadingOptRatio;
+  auto x_step_ratio = kXOptRatio;
+  auto y_step_ratio = kYOptRatio;
+  for (auto i = 0; i < kOptIterNum; ++i) {
+    auto heading_step = heading_range / heading_step_ratio;
+    auto heading_lower = (*heading) - heading_range / 2.0;
+    auto heading_upper = (*heading) + heading_range / 2.0;
+
+    auto x_step = x_range / x_step_ratio;
+    auto x_lower = position->x() - x_range / 2.0;
+    auto x_upper = position->x() + x_range / 2.0;
+
+    auto y_step = y_range / y_step_ratio;
+    auto y_lower = position->y() - y_range / 2.0;
+    auto y_upper = position->y() + y_range / 2.0;
+
+    find_near(heading_lower, heading_upper, heading_step, x_lower, x_upper,
+              x_step, y_lower, y_upper, y_step);
+
+    heading_range = heading_step * 2.0;
+    x_range = x_step * 2.0;
+    y_range = y_step * 2.0;
   }
 
-  // optimize heading func
-  auto optimize_heading_direct = [&](bool direct) {
-    auto step = kHeadingOptStepMin;
-    for (auto i = 0; i < kHeadingOptStepCount; ++i) {
-      auto heading_testing = *heading + (direct ? 1.0 : -1.0) * step;
-      auto error = ComputeError(source_points, *position, heading_testing);
-      if (error < current_error) {
-        current_error = error;
-        *heading = heading_testing;
-        step *= 2.0;
-      } else {
-        break;
-      }
-    }
-  };
-
-  // optimize position x func
-  auto optimize_position_x_direct = [&](bool direct) {
-    auto step = kPositionXOptStepMin;
-    for (auto i = 0; i < kPositionXOptStepCount; ++i) {
-      auto position_testing = *position;
-      position_testing.set_x(position->x() + (direct ? 1.0 : -1.0) * step);
-      auto error = ComputeError(source_points, position_testing, *heading);
-      if (error < current_error) {
-        current_error = error;
-        position->set_x(position_testing.x());
-        step *= 2.0;
-      } else {
-        break;
-      }
-    }
-  };
-
-  // optimize position y func
-  auto optimize_position_y_direct = [&](bool direct) {
-    auto step = kPositionYOptStepMin;
-    for (auto i = 0; i < kPositionYOptStepCount; ++i) {
-      auto position_testing = *position;
-      position_testing.set_y(position->y() + (direct ? 1.0 : -1.0) * step);
-      auto error = ComputeError(source_points, position_testing, *heading);
-      if (error < current_error) {
-        current_error = error;
-        position->set_y(position_testing.y());
-        step *= 2.0;
-      } else {
-        break;
-      }
-    }
-  };
-
-  // optimize position and heading
-  optimize_heading_direct(true);
-  optimize_heading_direct(false);
-  optimize_position_x_direct(true);
-  optimize_position_x_direct(false);
-  optimize_position_y_direct(true);
-  optimize_position_y_direct(false);
+  ADEBUG << "on registrating, min error [" << current_error << "]";
 }
 
 double PCRegistrator::ComputeError(
     const std::vector<PCSourcePoint>& source_points,
-    const apollo::common::PointENU& position, double heading) {
+    const apollo::common::PointENU& position, double heading) const {
   double error = 0.0;
   std::size_t not_found = 0;
 
@@ -159,35 +143,37 @@ double PCRegistrator::ComputeError(
     enu_position.set_x(enu_x);
     enu_position.set_y(enu_y);
     enu_position.set_z(0.0);
-    auto nearest_p = map_->GetNearestPoint(enu_position);
+    double nearest_d2;
+    auto nearest_p = map_->GetNearestPoint(enu_position, &nearest_d2);
     if (!nearest_p) {
       ++not_found;
+      error += kNotFoundError;
       continue;
     }
 
-    // get distance error
-    auto x0 = nearest_p->position.x();
-    auto y0 = nearest_p->position.y();
-    auto xd = nearest_p->direction.x();
-    auto yd = nearest_p->direction.y();
-    auto xd2 = xd * xd;
-    auto yd2 = yd * yd;
-    auto r0 = yd * (enu_x - x0) - xd * (enu_y - y0);
-    error += kDistanceErrorRatio * r0 * r0 / (xd2 + yd2);
+    // get distance
+    auto p0 = Vec2d(nearest_p->position.x(), nearest_p->position.y());
+    auto pd = Vec2d(enu_x, enu_y);
+    auto d2 = nearest_d2;
 
-    // FLU to ENU
-    double enu_xd, enu_yd;
-    RotateAxis(-heading, p.direction.x(), p.direction.y(), &enu_xd, &enu_yd);
-    enu_xd += position.x();
-    enu_yd += position.y();
+    if (nearest_p->prev != nullptr) {
+      auto p1 =
+          Vec2d(nearest_p->prev->position.x(), nearest_p->prev->position.y());
+      d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
+    }
 
-    // get direction error
-    auto r1 = xd * enu_xd + yd * enu_yd;
-    error += (xd2 + yd2) * (enu_xd * enu_xd + enu_yd * enu_yd) - r1 * r1;
+    if (nearest_p->next != nullptr) {
+      auto p1 =
+          Vec2d(nearest_p->next->position.x(), nearest_p->next->position.y());
+      d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
+    }
+
+    // get error
+    error += std::sqrt(d2);
   }
 
-  error *= static_cast<double>(source_points.size()) /
-           (source_points.size() - not_found);
+  // error *= static_cast<double>(source_points.size()) /
+  //         (source_points.size() - not_found);
 
   return error;
 }

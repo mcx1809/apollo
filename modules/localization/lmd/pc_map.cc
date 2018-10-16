@@ -16,81 +16,126 @@
 
 #include "modules/localization/lmd/pc_map.h"
 
+#include <limits>
+#include <utility>
+
 #include "modules/common/log.h"
+
+#include "modules/common/math/vec2d.h"
 
 namespace apollo {
 namespace localization {
-namespace {
-constexpr int kNeibourNumber = 1;
-}
+
 using apollo::common::Point3D;
 using apollo::common::PointENU;
 using apollo::common::Status;
+using apollo::common::math::Vec2d;
+
+namespace {
+constexpr double kNodeSize = 1.0;
+constexpr double kMapResolution = 0.05;
+}  // namespace
 
 PCMap::PCMap(LMProvider* provider) {
   CHECK_NOTNULL(provider);
   provider_ = provider;
+
   auto pack_size = provider_->GetLaneMarkerPackSize();
   for (decltype(pack_size) pack_index = 0; pack_index < pack_size;
        ++pack_index) {
     auto lane_marker_size = provider_->GetLaneMarkerSize(pack_index);
     for (decltype(lane_marker_size) lane_index = 0;
          lane_index < lane_marker_size; ++lane_index) {
-      auto lane =
+      auto lane_marker =
           provider_->GetLaneMarker(std::make_pair(pack_index, lane_index));
-      if (lane != nullptr) {
-        const auto& lane_points = lane->points();
-        auto lane_points_size = lane_points.size();
-        for (decltype(lane_points_size) point_index = 0;
-             point_index < lane_points_size; ++point_index) {
-          const auto& lane_point = lane_points[point_index];
-          point_cloud_.push_back(new PCMapPoint(lane_point));
-        }
-      }
+      if (lane_marker != nullptr) LoadLaneMarker(*lane_marker);
     }
-  }
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  auto points_size = point_cloud_.size();
-  cloud->points.resize(points_size);
-  for (decltype(points_size) point_index = 0; point_index < points_size;
-       ++point_index) {
-    cloud->points[point_index].x = point_cloud_[point_index]->position.x();
-    cloud->points[point_index].y = point_cloud_[point_index]->position.y();
-    cloud->points[point_index].z = point_cloud_[point_index]->position.z();
-  }
-  kd_tree_.setInputCloud(cloud);
-}
-
-PCMap::~PCMap() {
-  if (point_cloud_.size()) {
-    for (auto iter = point_cloud_.begin(); iter != point_cloud_.end(); ++iter) {
-      delete *iter;
-      *iter = nullptr;
-    }
-    point_cloud_.clear();
   }
 }
 
-Status PCMap::UpdateRange(const PointENU& position, const double radius) {
+Status PCMap::UpdateRange(const PointENU& position, double radius) {
   return Status::OK();
 }
 
-PCMapPoint* PCMap::GetNearestPoint(const PointENU& position) const {
-  pcl::PointXYZ search_point;
-  search_point.x = position.x();
-  search_point.y = position.y();
-  search_point.z = position.z();
-  std::vector<int> searched_indexes(kNeibourNumber);
-  std::vector<float> squared_distances(kNeibourNumber);
-  if (kd_tree_.nearestKSearch(search_point, kNeibourNumber, searched_indexes,
-                              squared_distances) > 0) {
-    ADEBUG
-        << " the point in point_cloud_ list with index " << searched_indexes[0]
-        << " is the nearest point to required position with distance equal to "
-        << squared_distances[0] << std::endl;
-    return point_cloud_[searched_indexes[0]];
+const PCMapPoint* PCMap::GetNearestPoint(const PointENU& position,
+                                         double* d2) const {
+  auto node_index = MakeNodeIndex(position.x(), position.y());
+
+  auto node_it = nodes_.find(node_index);
+  if (node_it == nodes_.end()) return nullptr;
+
+  auto d2_min = std::numeric_limits<double>::max();
+  const PCMapPoint* nearest_point = nullptr;
+  for (const auto& point_pair : node_it->second.points) {
+    const auto& point = point_pair.second;
+    auto d2_testing = Vec2d(point.position.x(), point.position.y())
+                          .DistanceSquareTo(Vec2d(position.x(), position.y()));
+    if (d2_testing < d2_min) {
+      d2_min = d2_testing;
+      nearest_point = &point;
+    }
   }
-  return nullptr;
+
+  if (d2 != nullptr) *d2 = d2_min;
+
+  return nearest_point;
+}
+
+const PCMapPoint* PCMap::GetNearestPoint(const PointENU& position) const {
+  return GetNearestPoint(position, nullptr);
+}
+
+void PCMap::LoadLaneMarker(const OdometryLaneMarker& lane_marker) {
+  PCMapPoint* seg_point = nullptr;
+
+  for (const auto& lane_point : lane_marker.points()) {
+    auto node_index =
+        MakeNodeIndex(lane_point.position().x(), lane_point.position().y());
+
+    auto set_point = [&](std::map<Index2D, PCMapPoint>* points) {
+      Index2D index;
+      index.x = lane_point.position().x() / kMapResolution;
+      index.y = lane_point.position().y() / kMapResolution;
+
+      auto point_it = points->find(index);
+      if (point_it == points->end()) {
+        auto& point =
+            points->emplace(index, PCMapPoint(lane_point)).first->second;
+        if (seg_point != nullptr) {
+          seg_point->next = &point;
+          point.prev = seg_point;
+        }
+        seg_point = &point;
+      } else {
+        auto& point = point_it->second;
+        if (seg_point == nullptr) {
+          if (point.next == nullptr) seg_point = &point;
+        } else {
+          if (point.prev == nullptr) {
+            seg_point->next = &point;
+            point.prev = seg_point;
+          }
+          if (point.next == nullptr)
+            seg_point = &point;
+          else
+            seg_point = nullptr;
+        }
+      }
+    };
+
+    auto node_it = nodes_.find(node_index);
+    if (node_it == nodes_.end())
+      set_point(&nodes_[node_index].points);
+    else
+      set_point(&node_it->second.points);
+  }
+}
+
+PCMap::Index2D PCMap::MakeNodeIndex(double x, double y) const {
+  Index2D index;
+  index.x = x / kNodeSize;
+  index.y = y / kNodeSize;
+  return index;
 }
 
 }  // namespace localization

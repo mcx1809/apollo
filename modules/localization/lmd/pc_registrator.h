@@ -68,16 +68,17 @@ class PCRegistrator {
   void Register(const std::vector<PCSourcePoint>& source_points,
                 const apollo::common::PointENU& position_estimated,
                 double heading_estimated, apollo::common::PointENU* position,
-                double* heading);
+                double* heading) const;
 
  private:
   double ComputeError(const std::vector<PCSourcePoint>& source_points,
-                      const apollo::common::PointENU& position, double heading);
+                      const apollo::common::PointENU& position,
+                      double heading) const;
 
  private:
   PCMap* map_;
 
-  FRIEND_TEST(PCRegistrator, ComputeError);
+  FRIEND_TEST(PCRegistratorTest, ComputeError);
 };
 
 }  // namespace localization

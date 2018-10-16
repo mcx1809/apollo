@@ -23,10 +23,13 @@
 #define MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
 
 #include <utility>
+
 #include "modules/common/proto/geometry.pb.h"
+#include "modules/localization/proto/odometry_lane_marker.pb.h"
+
 #include "modules/common/util/file.h"
 #include "modules/localization/common/localization_gflags.h"
-#include "modules/localization/proto/odometry_lane_marker.pb.h"
+
 /**
  * @namespace apollo::localization
  * @brief apollo::localization

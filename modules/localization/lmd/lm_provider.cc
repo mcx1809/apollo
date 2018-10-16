@@ -38,8 +38,8 @@ const int64_t LMProvider::GetLaneMarkerSize(const int64_t& pack_index) const {
 double LMProvider::CalculateDistance(
     const apollo::common::PointENU& position,
     const apollo::common::PointENU& current_pos) const {
-  double distance = sqrt(pow((position.x() - current_pos.x()), 2.0) +
-                         pow((position.y() - current_pos.y()), 2.0));
+  double distance = sqrt(pow((position.x() - current_pos.x()), 2) +
+                         pow((position.y() - current_pos.y()), 2));
   return distance;
 }
 

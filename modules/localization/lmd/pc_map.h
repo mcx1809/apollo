@@ -21,17 +21,13 @@
 
 #ifndef MODULES_LOCALIZATION_LMD_PC_MAP_H_
 #define MODULES_LOCALIZATION_LMD_PC_MAP_H_
-#include <iterator>
-#include <list>
-#include <utility>
-#include <vector>
+
+#include <map>
 
 #include "modules/common/proto/geometry.pb.h"
+
 #include "modules/common/status/status.h"
 #include "modules/localization/lmd/lm_provider.h"
-
-#include "pcl/kdtree/kdtree_flann.h"
-#include "pcl/point_cloud.h"
 
 /**
  * @namespace apollo::localization
@@ -50,8 +46,8 @@ struct PCMapPoint {
   apollo::common::PointENU position;
   apollo::common::Point3D direction;
   double curvature;
-  explicit PCMapPoint(
-      const apollo::localization::OdometryLaneMarkerPoint& point) {
+
+  explicit PCMapPoint(const OdometryLaneMarkerPoint& point) {
     position = point.position();
     direction = point.direct();
     curvature = point.curvature();
@@ -64,9 +60,27 @@ struct PCMapPoint {
  * @brief  Map of point cloud.
  */
 class PCMap {
+  struct Index2D {
+    int64_t x;
+    int64_t y;
+
+    bool operator<(const Index2D& other) const {
+      if (x < other.x)
+        return true;
+      else if (x == other.x)
+        return y < other.y;
+      else
+        return false;
+    }
+  };
+
+  struct Node {
+    std::map<Index2D, PCMapPoint> points;
+  };
+
  public:
   explicit PCMap(LMProvider* provider);
-  ~PCMap();
+
   /**
    * @brief  Update map for range.
    * @param position The position of center point.
@@ -74,7 +88,17 @@ class PCMap {
    * @return Status::OK() if a suitable speed-data is created; error otherwise.
    */
   apollo::common::Status UpdateRange(const apollo::common::PointENU& position,
-                                     const double radius);
+                                     double radius);
+
+  /**
+   * @brief  Find the nearest point in lane_marker according to the given
+   * position.
+   * @param position The given position.
+   * @param d2 Distance squqre.
+   * @return The nearest point in lane_marker or nullptr.
+   */
+  const PCMapPoint* GetNearestPoint(const apollo::common::PointENU& position,
+                                    double* d2) const;
 
   /**
    * @brief  Find the nearest point in lane_marker according to the given
@@ -82,12 +106,16 @@ class PCMap {
    * @param position The given position.
    * @return The nearest point in lane_marker or nullptr.
    */
-  PCMapPoint* GetNearestPoint(const apollo::common::PointENU& position) const;
+  const PCMapPoint* GetNearestPoint(
+      const apollo::common::PointENU& position) const;
+
+ private:
+  void LoadLaneMarker(const OdometryLaneMarker& lane_marker);
+  Index2D MakeNodeIndex(double x, double y) const;
 
  private:
   LMProvider* provider_;
-  pcl::KdTreeFLANN<pcl::PointXYZ> kd_tree_;
-  std::vector<PCMapPoint*> point_cloud_;
+  std::map<Index2D, Node> nodes_;
 };
 
 }  // namespace localization
