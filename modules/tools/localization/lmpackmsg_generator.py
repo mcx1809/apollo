@@ -174,12 +174,12 @@ def write_info(source_tuple, filename):
             source_tuple[0][obs_index].lane_marker.right_lane_marker.c3_curvature_derivative)
         for i in range(10):
             point = lmd_right_lane_marker.points.add()
-            location_offset = calculate_location_offset(- heading_value, i * 0.1, get_curve_value(
+            location_offset = calculate_offset(- heading_value, i * 0.1, get_curve_value(
                 i * 0.1, right_c0_position, right_c1_heading_angle, right_c2_curvature, right_c3_curvature_derivative))
             point.position.x = initial_x + location_offset[0]
             point.position.y = initial_y + location_offset[1]
             point.position.z = initial_z
-            direct_offset = calculate_offset(- heading_value, 1, 0)
+            direct_offset = calculate_offset(- heading_value, 1.0, 0.0)
             point.direct.x = direct_offset[0]
             point.direct.y = direct_offset[1]
             point.direct.z = 0
