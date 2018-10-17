@@ -41,6 +41,7 @@
 #include "modules/localization/lmd/pc_map.h"
 #include "modules/localization/lmd/pc_registrator.h"
 #include "modules/localization/localization_base.h"
+#include "modules/common/math/kalman_filter.h"
 
 /**
  * @namespace apollo::localization
@@ -85,6 +86,15 @@ class LMDLocalization : public LocalizationBase {
   void PrintPoseError(const Pose &pose, double timestamp_sec);
   void RunWatchDog();
 
+  void InitKFENUPredictor(const Pose& pose);
+  void UpdateKFENUPredictor(const Pose& pose,double delta_ts);
+
+      /**
+   * @brief Get the motion Kalman filter.
+   * @return The motion Kalman filter.
+   */
+  const common::math::KalmanFilter<double, 9, 3, 0>& Kf_Enu_Predictor() const;
+
  private:
   ros::Timer timer_;
   apollo::common::monitor::MonitorLogger monitor_logger_;
@@ -96,6 +106,8 @@ class LMDLocalization : public LocalizationBase {
   bool has_last_pose_ = false;
   Pose last_pose_;
   double last_pose_timestamp_sec_;
+
+  common::math::KalmanFilter<double, 9, 3, 0> kf_enu_predictor_;
 };
 
 }  // namespace localization

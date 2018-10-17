@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *****************************************************************************/
-
 #include "modules/localization/lmd/lmd_localization.h"
 
 #include <algorithm>
@@ -34,6 +33,7 @@ using apollo::common::adapter::AdapterManager;
 using apollo::common::adapter::GpsAdapter;
 using apollo::common::adapter::ImuAdapter;
 using apollo::common::math::HeadingToQuaternion;
+using apollo::common::math::KalmanFilter;
 using apollo::common::math::QuaternionRotate;
 using apollo::common::math::QuaternionToHeading;
 using apollo::common::math::RotateAxis;
@@ -304,6 +304,8 @@ void LMDLocalization::OnGps(const Gps &gps) {
 
 void LMDLocalization::OnPerceptionObstacles(
     const PerceptionObstacles &obstacles) {
+  //
+  // return;
   if (has_last_pose_ && obstacles.has_lane_marker()) {
     if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec()) {
       AERROR << "obstacles has no header or no some fields";
@@ -478,11 +480,129 @@ bool LMDLocalization::GetGpsPose(const Gps &gps, Pose *pose,
   return true;
 }
 
+const KalmanFilter<double, 9, 3, 0> &LMDLocalization::Kf_Enu_Predictor() const {
+  return kf_enu_predictor_;
+}
+
+void LMDLocalization::InitKFENUPredictor(const Pose &pose) {
+  // Set transition matrix F
+  // constant acceleration dynamic model
+  Eigen::Matrix<double, 9, 9> F;
+  F.setIdentity();
+  kf_enu_predictor_.SetTransitionMatrix(F);
+
+  // Set observation matrix H
+  Eigen::Matrix<double, 3, 9> H;
+  H.setIdentity();
+  kf_enu_predictor_.SetObservationMatrix(H);
+
+  // Set covariance of transition noise matrix Q
+  // make the noise this order:
+  // noise(x/y) < noise(vx/vy) < noise(ax/ay)
+  Eigen::Matrix<double, 9, 9> Q;
+  // Q.setZero();
+  Q.setIdentity();
+  Q *= 0.05;
+  kf_enu_predictor_.SetTransitionNoise(Q);
+
+  // Set observation noise matrix R
+  Eigen::Matrix<double, 3, 3> R;
+  // R.setZero();
+  R.setIdentity();
+  R *= 0.05;
+  kf_enu_predictor_.SetObservationNoise(R);
+
+  // Set current state covariance matrix P
+  // make the covariance this order:
+  // cov(x/y) < cov(vx/vy) < cov(ax/ay)
+  Eigen::Matrix<double, 9, 9> P;
+  P.setIdentity();
+  double d_p_var = 0.00001;
+  // P *= FLAGS_p_var;
+  P *= d_p_var;
+
+  // Set initial state
+  Eigen::Matrix<double, 9, 1> x;
+  if (pose.has_position()) {
+    x(0, 0) = pose.position().x();
+    x(1, 0) = pose.position().y();
+    x(2, 0) = pose.position().z();
+  }
+  if (pose.has_linear_velocity()) {
+    x(3, 0) = pose.linear_velocity().x();
+    x(4, 0) = pose.linear_velocity().y();
+    x(5, 0) = pose.linear_velocity().z();
+  }
+  if (pose.has_linear_acceleration()) {
+    x(6, 0) = pose.linear_acceleration().x();
+    x(7, 0) = pose.linear_acceleration().y();
+    x(8, 0) = pose.linear_acceleration().z();
+  }
+  kf_enu_predictor_.SetStateEstimate(x, P);
+}
+
+void LMDLocalization::UpdateKFENUPredictor(const Pose &pose, double delta_ts) {
+  // Set tansition matrix and predict
+  auto F = kf_enu_predictor_.GetTransitionMatrix();
+  F(0, 3) = delta_ts;
+  F(0, 6) = 0.5 * delta_ts * delta_ts;
+  F(1, 4) = delta_ts;
+  F(1, 7) = 0.5 * delta_ts * delta_ts;
+  F(2, 5) = delta_ts;
+  F(2, 8) = 0.5 * delta_ts * delta_ts;
+  F(3, 6) = delta_ts;
+  F(4, 7) = delta_ts;
+  F(5, 8) = delta_ts;
+
+  kf_enu_predictor_.SetTransitionMatrix(F);
+  kf_enu_predictor_.Predict();
+
+  // Set observation and correct
+  Eigen::Matrix<double, 3, 1> z;
+  z(0, 0) = pose.position().x();
+  z(1, 0) = pose.position().y();
+  z(2, 0) = pose.position().z();
+  kf_enu_predictor_.Correct(z);
+}
+
 bool LMDLocalization::PredictPose(const Pose &old_pose,
                                   double old_timestamp_sec,
                                   double new_timestamp_sec, Pose *new_pose) {
-  // TODO(all):
+// TODO(all):
+#if 0
   new_pose->CopyFrom(old_pose);
+#else
+  new_pose->CopyFrom(old_pose);
+  if (!kf_enu_predictor_.IsInitialized()) {
+    InitKFENUPredictor(old_pose);
+  }
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
+  if (delta_ts > 0.0) {
+    UpdateKFENUPredictor(old_pose, delta_ts);
+  }
+  new_pose->mutable_position()->set_x(
+      kf_enu_predictor_.GetStateEstimate()(0, 0));
+
+  new_pose->mutable_position()->set_y(
+      kf_enu_predictor_.GetStateEstimate()(1, 0));
+
+  new_pose->mutable_position()->set_z(
+      kf_enu_predictor_.GetStateEstimate()(2, 0));
+
+  ADEBUG << "Kalman estimate position :x[" << std::setprecision(6)
+         << new_pose->position().x() << std::fixed << "],y[ "
+         << std::setprecision(6) << new_pose->position().y() << std::fixed
+         << "], z[" << std::setprecision(6) << new_pose->position().z()
+         << std::fixed << "]";
+
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+
+#endif
 
   return true;
 }
