@@ -148,8 +148,9 @@ TEST(LMProviderTest, GetLaneMarker) {
       lm_provider_->GetLaneMarker(nearest_index);
   EXPECT_EQ(10, lane_marker->points_size());
   for (int64_t index = 0; index < lane_marker->points_size(); index++) {
-    EXPECT_EQ(1, lane_marker->points(index).direct().x());
-    EXPECT_EQ(0, lane_marker->points(index).direct().z());
+    EXPECT_NEAR(-0.653764, lane_marker->points(index).direct().x(), 0.001);
+    EXPECT_NEAR(0.7566988, lane_marker->points(index).direct().y(), 0.01);
+    EXPECT_NEAR(0.0, lane_marker->points(index).direct().z(), 0.001);
   }
   EXPECT_NEAR(682377.2518249487, lane_marker->points(0).position().x(), 0.01);
   EXPECT_NEAR(3111284.2039481895, lane_marker->points(0).position().y(), 0.01);
