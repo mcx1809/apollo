@@ -562,16 +562,11 @@ void LMDLocalization::UpdateKFENUPredictor(const Pose &pose, double delta_ts) {
   kf_enu_predictor_.Correct(z);
 }
 
-bool LMDLocalization::PredictPose(const Pose &old_pose,
-                                  double old_timestamp_sec,
-                                  double new_timestamp_sec, Pose *new_pose) {
-// TODO(all):
-#if 0
-  new_pose->CopyFrom(old_pose);
-#else
-
+bool LMDLocalization::PredictByKalman(const Pose &old_pose,
+                                      double old_timestamp_sec,
+                                      double new_timestamp_sec,
+                                      Pose *new_pose) {
   double delta_ts = new_timestamp_sec - old_timestamp_sec;
-#if 1
   new_pose->CopyFrom(old_pose);
   if (!kf_enu_predictor_.IsInitialized()) {
     InitKFENUPredictor(old_pose);
@@ -612,8 +607,20 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
          << std::setprecision(6) << new_pose->linear_velocity().y()
          << std::fixed << "], Vz[" << std::setprecision(6)
          << new_pose->linear_velocity().z() << std::fixed << "]";
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+  return true;
+}
 
-#else
+bool LMDLocalization::PredictByLinearIntergrate(const Pose &old_pose,
+                                      double old_timestamp_sec,
+                                      double new_timestamp_sec,
+                                      Pose *new_pose) {
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
   new_pose->CopyFrom(old_pose);
   double x = old_pose.position().x() +
              old_pose.linear_velocity().x() * delta_ts +
@@ -656,10 +663,32 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
          << std::setprecision(6) << new_pose->linear_velocity().y()
          << std::fixed << "], Vz[" << std::setprecision(6)
          << new_pose->linear_velocity().z() << std::fixed << "]";
-#endif
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
+         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << old_pose.linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << old_pose.linear_acceleration().z() << std::fixed << "]";
 
-// Chassis
-#if 0
+  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
+         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << new_pose->linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << new_pose->linear_acceleration().z() << std::fixed << "]";
+
+  return true;
+}
+
+bool LMDLocalization::PredictByChassis(const Pose &old_pose,
+                                       double old_timestamp_sec,
+                                       double new_timestamp_sec,
+                                       Pose *new_pose) {
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
   Chassis chassis;
   if (!FindMatchingChassis(old_timestamp_sec, &chassis)) return false;
   if (chassis.has_speed_mps()) {
@@ -678,7 +707,6 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
     new_pose->mutable_position()->set_y(old_pose.position().y() +
                                         enu_y_velocity * delta_ts);
   }
-#endif
 
   // IMU
   CorrectedImu imu_msg;
@@ -686,7 +714,6 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
   CHECK(imu_msg.has_imu());
   const auto &imu = imu_msg.imu();
   FillPoseFromImu(imu, new_pose);
-#endif
   ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
          << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
          << std::setprecision(6) << old_pose.linear_acceleration().y()
@@ -699,6 +726,22 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
          << std::fixed << "], Az[" << std::setprecision(6)
          << new_pose->linear_acceleration().z() << std::fixed << "]";
 
+  return true;
+}
+
+bool LMDLocalization::PredictPose(const Pose &old_pose,
+                                  double old_timestamp_sec,
+                                  double new_timestamp_sec, Pose *new_pose) {
+// TODO(all):
+#if 0
+  new_pose->CopyFrom(old_pose);
+#else
+  PredictByKalman(old_pose, old_timestamp_sec, new_timestamp_sec, new_pose);
+
+  // PredictByLinearIntergrate(old_pose,old_timestamp_sec,new_timestamp_sec,new_pose);
+
+  // PredictByChassis(old_pose,old_timestamp_sec,new_timestamp_sec,new_pose);
+#endif
   return true;
 }
 

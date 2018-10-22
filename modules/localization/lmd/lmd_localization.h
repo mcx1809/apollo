@@ -98,6 +98,15 @@ class LMDLocalization : public LocalizationBase {
   void InitKFENUPredictor(const Pose &pose);
   void UpdateKFENUPredictor(const Pose &pose, double delta_ts);
 
+  bool PredictByKalman(const Pose &old_pose, double old_timestamp_sec,
+                       double new_timestamp_sec, Pose *new_pose);
+
+  bool PredictByLinearIntergrate(const Pose &old_pose, double old_timestamp_sec,
+                       double new_timestamp_sec, Pose *new_pose);
+
+  bool PredictByChassis(const Pose &old_pose, double old_timestamp_sec,
+                        double new_timestamp_sec, Pose *new_pose);
+
  private:
   ros::Timer timer_;
   apollo::common::monitor::MonitorLogger monitor_logger_;
