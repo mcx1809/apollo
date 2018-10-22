@@ -42,6 +42,8 @@ using apollo::perception::PerceptionObstacles;
 
 namespace {
 constexpr double kPCMapSearchRadius = 10.0;
+constexpr int kPointsNumInsertToMap = 240;
+constexpr double kInsertMapLaneLength = 12.0;
 }  // namespace
 
 template <class T>
@@ -349,7 +351,13 @@ void LMDLocalization::OnPerceptionObstacles(
     ADEBUG << "after pc registration, x[" << position.x() << "], y["
            << position.y() << "], z[" << position.z() << "], heading["
            << heading << "]";
-
+    // update pc_map_ to contain perception lane_markers
+    auto source_lanes =
+        pc_map_.PrepareLaneMarkers(lane_markers, position, heading,
+                                   kPointsNumInsertToMap, kInsertMapLaneLength);
+    for (auto lane : source_lanes) {
+      pc_map_.LoadLaneMarker(lane);
+    }
     // position
     // world frame -> map frame
     new_pose.mutable_position()->set_x(position.x() - map_offset_[0]);

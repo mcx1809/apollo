@@ -15,14 +15,16 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/pc_map.h"
+#include "modules/localization/lmd/lm_provider.h"
 
 #include "gtest/gtest.h"
 
-#include "modules/localization/lmd/lm_provider.h"
-
 namespace apollo {
 namespace localization {
-
+namespace {
+constexpr int kPointsNumInsertToMap = 240;
+constexpr double kInsertMapLaneLength = 12.0;
+}  // namespace
 using apollo::common::PointENU;
 
 TEST(PCMapTest, GetNearestPoint) {
@@ -47,5 +49,35 @@ TEST(PCMapTest, GetNearestPoint) {
   }
 }
 
+TEST(PCMapTest, PrepareLaneMarkers) {
+  LMProvider provider;
+  PCMap map(&provider);
+  PointENU position;
+  position.set_x(681732.77703);
+  position.set_y(3112136.72507);
+  position.set_z(60.723);
+  apollo::perception::LaneMarker left_lane_marker;
+  left_lane_marker.set_c0_position(1.48438);
+  left_lane_marker.set_c1_heading_angle(-0.00586);
+  left_lane_marker.set_c2_curvature(0.00031);
+  left_lane_marker.set_c3_curvature_derivative(0.000);
+  apollo::perception::LaneMarker right_lane_marker;
+  right_lane_marker.set_c0_position(-2.10156);
+  right_lane_marker.set_c1_heading_angle(0.00488);
+  right_lane_marker.set_c2_curvature(0.00008);
+  right_lane_marker.set_c3_curvature_derivative(0.000);
+  apollo::perception::LaneMarkers lane_markers;
+  lane_markers.mutable_left_lane_marker()->CopyFrom(left_lane_marker);
+  lane_markers.mutable_right_lane_marker()->CopyFrom(right_lane_marker);
+  double heading = -1.19396;
+  auto source_lanes =
+      map.PrepareLaneMarkers(lane_markers, position, heading,
+                             kInsertMapLaneLength, kPointsNumInsertToMap);
+  EXPECT_EQ(2, source_lanes.size());
+  for (auto lane : source_lanes) {
+    EXPECT_EQ(kPointsNumInsertToMap, lane.points_size());
+    map.LoadLaneMarker(lane);
+  }
+}
 }  // namespace localization
 }  // namespace apollo

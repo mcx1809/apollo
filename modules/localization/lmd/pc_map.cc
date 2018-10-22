@@ -20,7 +20,6 @@
 #include <utility>
 
 #include "modules/common/log.h"
-
 #include "modules/common/math/vec2d.h"
 
 namespace apollo {
@@ -29,7 +28,10 @@ namespace localization {
 using apollo::common::Point3D;
 using apollo::common::PointENU;
 using apollo::common::Status;
+using apollo::common::math::RotateAxis;
 using apollo::common::math::Vec2d;
+using apollo::perception::LaneMarker;
+using apollo::perception::LaneMarkers;
 
 namespace {
 constexpr double kNodeSize = 1.0;
@@ -129,6 +131,86 @@ void PCMap::LoadLaneMarker(const OdometryLaneMarker& lane_marker) {
     else
       set_point(&node_it->second.points);
   }
+}
+
+const OdometryLaneMarker PCMap::GenerateOdometryLaneMarker(
+    const LaneMarker& lanemarker, const PointENU position, const double heading,
+    const double lane_length, const int point_number) const {
+  OdometryLaneMarker odo_lane;
+  for (int i = 0; i < point_number; ++i) {
+    auto point = odo_lane.add_points();
+    auto relative_x = lane_length / point_number * i;
+    auto relative_y = CalCurveValue(
+        relative_x, lanemarker.c0_position(), lanemarker.c1_heading_angle(),
+        lanemarker.c2_curvature(), lanemarker.c3_curvature_derivative());
+    auto curvature_value = CalCurvity(
+        relative_x, lanemarker.c0_position(), lanemarker.c1_heading_angle(),
+        lanemarker.c2_curvature(), lanemarker.c3_curvature_derivative());
+    point->set_curvature(curvature_value);
+    double enu_x, enu_y;
+    RotateAxis(-heading, relative_x, relative_y, &enu_x, &enu_y);
+    point->mutable_position()->set_x(position.x() + enu_x);
+    point->mutable_position()->set_y(position.y() + enu_y);
+    point->mutable_position()->set_z(position.z());
+    double enu_x_direct, enu_y_direct;
+    RotateAxis(-heading, 0, 1, &enu_x_direct, &enu_y_direct);
+    point->mutable_direct()->set_x(enu_x_direct);
+    point->mutable_direct()->set_y(enu_y_direct);
+    point->mutable_direct()->set_z(0.0);
+  }
+  return odo_lane;
+}
+
+std::vector<OdometryLaneMarker> PCMap::PrepareLaneMarkers(
+    const LaneMarkers& source, const PointENU position, const double heading,
+    const double lane_length, const int point_number) {
+  std::vector<OdometryLaneMarker> result;
+  if (source.has_left_lane_marker()) {
+    const auto& lanemarker = source.left_lane_marker();
+    const auto& odo_lane_marker = GenerateOdometryLaneMarker(
+        lanemarker, position, heading, lane_length, point_number);
+    result.emplace_back(odo_lane_marker);
+  }
+  if (source.has_right_lane_marker()) {
+    const auto& lanemarker = source.right_lane_marker();
+    const auto& odo_lane_marker = GenerateOdometryLaneMarker(
+        lanemarker, position, heading, lane_length, point_number);
+    result.emplace_back(odo_lane_marker);
+  }
+
+  for (int i = 0; i < source.next_left_lane_marker_size(); ++i) {
+    const auto& lanemarker = source.next_left_lane_marker(i);
+    const auto& odo_lane_marker = GenerateOdometryLaneMarker(
+        lanemarker, position, heading, lane_length, point_number);
+    result.emplace_back(odo_lane_marker);
+  }
+
+  for (int i = 0; i < source.next_right_lane_marker_size(); ++i) {
+    const auto& lanemarker = source.next_right_lane_marker(i);
+    const auto& odo_lane_marker = GenerateOdometryLaneMarker(
+        lanemarker, position, heading, lane_length, point_number);
+    result.emplace_back(odo_lane_marker);
+  }
+  return result;
+}
+
+double PCMap::CalCurveValue(const double x_value, const double c0,
+                            const double c1, const double c2,
+                            const double c3) const {
+  return c3 * pow(x_value, 3.0) + c2 * pow(x_value, 2.0) + c1 * x_value + c0;
+}
+
+double PCMap::CalDerivative(const double x_value, const double c0,
+                            const double c1, const double c2,
+                            const double c3) const {
+  return 3 * c3 * pow(x_value, 2.0) + 2 * c2 + c1;
+}
+
+double PCMap::CalCurvity(const double x_value, const double c0, const double c1,
+                         const double c2, const double c3) const {
+  double derivative = CalDerivative(x_value, c0, c1, c2, c3);
+  return abs(6 * c3 * x_value + 2 * c2) /
+         pow(1 + pow(derivative, 2.0), (3.0 / 2));
 }
 
 PCMap::Index2D PCMap::MakeNodeIndex(double x, double y) const {
