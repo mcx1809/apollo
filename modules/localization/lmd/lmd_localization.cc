@@ -26,10 +26,12 @@
 namespace apollo {
 namespace localization {
 
+using apollo::canbus::Chassis;
 using apollo::common::Point3D;
 using apollo::common::PointENU;
 using apollo::common::Status;
 using apollo::common::adapter::AdapterManager;
+using apollo::common::adapter::ChassisAdapter;
 using apollo::common::adapter::GpsAdapter;
 using apollo::common::adapter::ImuAdapter;
 using apollo::common::math::HeadingToQuaternion;
@@ -307,7 +309,7 @@ void LMDLocalization::OnGps(const Gps &gps) {
 void LMDLocalization::OnPerceptionObstacles(
     const PerceptionObstacles &obstacles) {
   //
-  // return;
+  return;
   if (has_last_pose_ && obstacles.has_lane_marker()) {
     if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec()) {
       AERROR << "obstacles has no header or no some fields";
@@ -488,88 +490,75 @@ bool LMDLocalization::GetGpsPose(const Gps &gps, Pose *pose,
   return true;
 }
 
-const KalmanFilter<double, 9, 3, 0> &LMDLocalization::Kf_Enu_Predictor() const {
-  return kf_enu_predictor_;
-}
-
 void LMDLocalization::InitKFENUPredictor(const Pose &pose) {
   // Set transition matrix F
-  // constant acceleration dynamic model
-  Eigen::Matrix<double, 9, 9> F;
+  Eigen::Matrix<double, 3, 3> F;
   F.setIdentity();
   kf_enu_predictor_.SetTransitionMatrix(F);
 
   // Set observation matrix H
-  Eigen::Matrix<double, 3, 9> H;
+  Eigen::Matrix<double, 3, 3> H;
   H.setIdentity();
   kf_enu_predictor_.SetObservationMatrix(H);
 
+  // Set control matrix
+  Eigen::Matrix<double, 3, 6> B;
+  B.setZero();
+  kf_enu_predictor_.SetControlMatrix(B);
+
   // Set covariance of transition noise matrix Q
-  // make the noise this order:
-  // noise(x/y) < noise(vx/vy) < noise(ax/ay)
-  Eigen::Matrix<double, 9, 9> Q;
-  // Q.setZero();
+  Eigen::Matrix<double, 3, 3> Q;
   Q.setIdentity();
-  Q *= 0.05;
+  Q *= 5.0;
   kf_enu_predictor_.SetTransitionNoise(Q);
 
   // Set observation noise matrix R
   Eigen::Matrix<double, 3, 3> R;
-  // R.setZero();
   R.setIdentity();
-  R *= 0.05;
+  R *= 5.0;
   kf_enu_predictor_.SetObservationNoise(R);
 
   // Set current state covariance matrix P
-  // make the covariance this order:
-  // cov(x/y) < cov(vx/vy) < cov(ax/ay)
-  Eigen::Matrix<double, 9, 9> P;
+  Eigen::Matrix<double, 3, 3> P;
   P.setIdentity();
-  double d_p_var = 0.00001;
-  // P *= FLAGS_p_var;
-  P *= d_p_var;
+  P *= 0.0001;
 
   // Set initial state
-  Eigen::Matrix<double, 9, 1> x;
-  if (pose.has_position()) {
-    x(0, 0) = pose.position().x();
-    x(1, 0) = pose.position().y();
-    x(2, 0) = pose.position().z();
-  }
-  if (pose.has_linear_velocity()) {
-    x(3, 0) = pose.linear_velocity().x();
-    x(4, 0) = pose.linear_velocity().y();
-    x(5, 0) = pose.linear_velocity().z();
-  }
-  if (pose.has_linear_acceleration()) {
-    x(6, 0) = pose.linear_acceleration().x();
-    x(7, 0) = pose.linear_acceleration().y();
-    x(8, 0) = pose.linear_acceleration().z();
-  }
+  Eigen::Matrix<double, 3, 1> x;
+  x.setZero();
+  x(0, 0) = pose.position().x();
+  x(1, 0) = pose.position().y();
+  x(2, 0) = pose.position().z();
+
   kf_enu_predictor_.SetStateEstimate(x, P);
 }
 
 void LMDLocalization::UpdateKFENUPredictor(const Pose &pose, double delta_ts) {
-  // Set tansition matrix and predict
-  auto F = kf_enu_predictor_.GetTransitionMatrix();
-  F(0, 3) = delta_ts;
-  F(0, 6) = 0.5 * delta_ts * delta_ts;
-  F(1, 4) = delta_ts;
-  F(1, 7) = 0.5 * delta_ts * delta_ts;
-  F(2, 5) = delta_ts;
-  F(2, 8) = 0.5 * delta_ts * delta_ts;
-  F(3, 6) = delta_ts;
-  F(4, 7) = delta_ts;
-  F(5, 8) = delta_ts;
+  Eigen::Matrix<double, 3, 6> B = kf_enu_predictor_.GetControlMatrix();
+  B(0, 0) = delta_ts;
+  B(0, 3) = 0.5 * delta_ts * delta_ts;
+  B(1, 1) = delta_ts;
+  B(1, 4) = 0.5 * delta_ts * delta_ts;
+  B(2, 2) = delta_ts;
+  B(2, 5) = 0.5 * delta_ts * delta_ts;
+  kf_enu_predictor_.SetControlMatrix(B);
 
-  kf_enu_predictor_.SetTransitionMatrix(F);
-  kf_enu_predictor_.Predict();
+  // Set control vector
+  Eigen::Matrix<double, 6, 1> u;
+  u(0, 0) = pose.linear_velocity().x();
+  u(1, 0) = pose.linear_velocity().y();
+  u(2, 0) = pose.linear_velocity().z();
+  u(3, 0) = pose.linear_acceleration().x();
+  u(4, 0) = pose.linear_acceleration().y();
+  u(5, 0) = pose.linear_acceleration().z();
 
-  // Set observation and correct
+  kf_enu_predictor_.Predict(u);
+
+  // Set observation vector
   Eigen::Matrix<double, 3, 1> z;
   z(0, 0) = pose.position().x();
   z(1, 0) = pose.position().y();
-  z(2, 0) = pose.position().z();
+  z(2, 0) = pose.position().y();
   kf_enu_predictor_.Correct(z);
 }
 
@@ -580,14 +569,17 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
 #if 0
   new_pose->CopyFrom(old_pose);
 #else
+
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
+#if 1
   new_pose->CopyFrom(old_pose);
   if (!kf_enu_predictor_.IsInitialized()) {
     InitKFENUPredictor(old_pose);
   }
-  double delta_ts = new_timestamp_sec - old_timestamp_sec;
   if (delta_ts > 0.0) {
     UpdateKFENUPredictor(old_pose, delta_ts);
   }
+
   new_pose->mutable_position()->set_x(
       kf_enu_predictor_.GetStateEstimate()(0, 0));
 
@@ -597,11 +589,96 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
   new_pose->mutable_position()->set_z(
       kf_enu_predictor_.GetStateEstimate()(2, 0));
 
+  new_pose->mutable_linear_velocity()->set_x(
+      old_pose.linear_velocity().x() +
+      old_pose.linear_acceleration().x() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_y(
+      old_pose.linear_velocity().y() +
+      old_pose.linear_acceleration().y() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_z(
+      old_pose.linear_velocity().z() +
+      old_pose.linear_acceleration().z() * delta_ts);
+
   ADEBUG << "Kalman estimate position :x[" << std::setprecision(6)
          << new_pose->position().x() << std::fixed << "],y[ "
          << std::setprecision(6) << new_pose->position().y() << std::fixed
          << "], z[" << std::setprecision(6) << new_pose->position().z()
          << std::fixed << "]";
+
+  ADEBUG << "Kalman v :Vx[" << std::setprecision(6)
+         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
+         << std::setprecision(6) << new_pose->linear_velocity().y()
+         << std::fixed << "], Vz[" << std::setprecision(6)
+         << new_pose->linear_velocity().z() << std::fixed << "]";
+
+#else
+  new_pose->CopyFrom(old_pose);
+  double x = old_pose.position().x() +
+             old_pose.linear_velocity().x() * delta_ts +
+             0.5 * old_pose.linear_acceleration().x() * delta_ts * delta_ts;
+
+  double y = old_pose.position().y() +
+             old_pose.linear_velocity().y() * delta_ts +
+             0.5 * old_pose.linear_acceleration().y() * delta_ts * delta_ts;
+
+  double z = old_pose.position().z() +
+             old_pose.linear_velocity().z() * delta_ts +
+             0.5 * old_pose.linear_acceleration().z() * delta_ts * delta_ts;
+
+  new_pose->mutable_position()->set_x(x);
+
+  new_pose->mutable_position()->set_y(y);
+
+  new_pose->mutable_position()->set_z(z);
+
+  new_pose->mutable_linear_velocity()->set_x(
+      old_pose.linear_velocity().x() +
+      old_pose.linear_acceleration().x() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_y(
+      old_pose.linear_velocity().y() +
+      old_pose.linear_acceleration().y() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_z(
+      old_pose.linear_velocity().z() +
+      old_pose.linear_acceleration().z() * delta_ts);
+
+  ADEBUG << "Time is  :[" << std::setprecision(6) << delta_ts << "]";
+
+  ADEBUG << "linear estimate position :x[" << std::setprecision(6) << x
+         << std::fixed << "],y[ " << std::setprecision(6) << y << std::fixed
+         << "], z[" << std::setprecision(6) << z << std::fixed << "]";
+
+  ADEBUG << "linear v :Vx[" << std::setprecision(6)
+         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
+         << std::setprecision(6) << new_pose->linear_velocity().y()
+         << std::fixed << "], Vz[" << std::setprecision(6)
+         << new_pose->linear_velocity().z() << std::fixed << "]";
+#endif
+
+// Chassis
+#if 0
+  Chassis chassis;
+  if (!FindMatchingChassis(old_timestamp_sec, &chassis)) return false;
+  if (chassis.has_speed_mps()) {
+    double enu_x_velocity, enu_y_velocity;
+    RotateAxis(-old_pose.heading(), chassis.speed_mps(), 0, &enu_x_velocity,
+               &enu_y_velocity);
+    ADEBUG << "chassis speedmps :[" << std::setprecision(6)
+           << chassis.speed_mps() << std::fixed << "] ";
+    ADEBUG << "chassis v :Vx[" << std::setprecision(6) << enu_x_velocity
+           << std::fixed << "],Vy[ " << std::setprecision(6) << enu_y_velocity
+           << std::fixed << "]";
+
+    new_pose->mutable_position()->set_x(old_pose.position().x() +
+                                        enu_x_velocity * delta_ts);
+
+    new_pose->mutable_position()->set_y(old_pose.position().y() +
+                                        enu_y_velocity * delta_ts);
+  }
+#endif
 
   // IMU
   CorrectedImu imu_msg;
@@ -609,8 +686,18 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
   CHECK(imu_msg.has_imu());
   const auto &imu = imu_msg.imu();
   FillPoseFromImu(imu, new_pose);
-
 #endif
+  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
+         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << old_pose.linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << old_pose.linear_acceleration().z() << std::fixed << "]";
+
+  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
+         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << new_pose->linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << new_pose->linear_acceleration().z() << std::fixed << "]";
 
   return true;
 }
@@ -669,7 +756,7 @@ bool LMDLocalization::FindMatchingGPS(double timestamp_sec, Gps *gps_msg) {
     }
   }
   return true;
-}
+}  // namespace localization
 
 bool LMDLocalization::FindMatchingIMU(double timestamp_sec,
                                       CorrectedImu *imu_msg) {
@@ -727,6 +814,121 @@ bool LMDLocalization::FindMatchingIMU(double timestamp_sec,
   }
   return true;
 }
+bool LMDLocalization::FindMatchingChassis(double timestamp_sec,
+                                          Chassis *chassis_msg) {
+  auto *chassis_adapter = AdapterManager::GetChassis();
+
+  if (chassis_adapter->Empty()) {
+    AERROR << "Cannot find Matching Chassis. "
+           << "Chassis message Queue is empty! timestamp[" << timestamp_sec
+           << "]";
+    return false;
+  }
+
+  // scan chassis buffer, find first chassis message that is newer than the
+  // given timestamp
+  ChassisAdapter::Iterator chassis_it = chassis_adapter->begin();
+  for (; chassis_it != chassis_adapter->end(); ++chassis_it) {
+    if ((*chassis_it)->header().timestamp_sec() - timestamp_sec >
+        FLAGS_timestamp_sec_tolerance) {
+      break;
+    }
+  }
+
+  if (chassis_it != chassis_adapter->end()) {  // found one
+    if (chassis_it == chassis_adapter->begin()) {
+      AERROR << "Chassis queue too short or request too old. "
+             << "Oldest timestamp["
+             << chassis_adapter->GetOldestObserved().header().timestamp_sec()
+             << "], Newest timestamp["
+             << chassis_adapter->GetLatestObserved().header().timestamp_sec()
+             << "], timestamp[" << timestamp_sec << "]";
+      *chassis_msg =
+          chassis_adapter->GetOldestObserved();  // the oldest chassis
+    } else {
+      // here is the normal case
+      auto chassis_it_1 = chassis_it;
+      chassis_it_1--;
+      if (!(*chassis_it)->has_header() || !(*chassis_it_1)->has_header()) {
+        AERROR << "chassis_it and chassis_it_1 must both have header.";
+        return false;
+      }
+      if (!InterpolateChassis(**chassis_it_1, **chassis_it, timestamp_sec,
+                              chassis_msg)) {
+        AERROR << "failed to interpolate IMU";
+        return false;
+      }
+    }
+  } else {
+    // give the newest imu, without extrapolation
+    *chassis_msg = chassis_adapter->GetLatestObserved();
+    if (chassis_msg == nullptr) {
+      AERROR << "Fail to get latest observed chassis_msg.";
+      return false;
+    }
+
+    if (!chassis_msg->has_header()) {
+      AERROR << "chassis_msg must have header.";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool LMDLocalization::InterpolateChassis(const Chassis &chassis1,
+                                         const Chassis &chassis2,
+                                         const double timestamp_sec,
+                                         Chassis *chassis_msg) {
+  if (!(chassis1.has_header() && chassis1.header().has_timestamp_sec() &&
+        chassis2.has_header() && chassis2.header().has_timestamp_sec())) {
+    AERROR
+        << "chassis1 and chassis2 has no header or no timestamp_sec in header";
+    return false;
+  }
+  if (timestamp_sec - chassis1.header().timestamp_sec() <
+      FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateChassis]: the given time stamp[" << timestamp_sec
+           << "] is older than the 1st message["
+           << chassis1.header().timestamp_sec() << "]";
+    *chassis_msg = chassis1;
+  } else if (timestamp_sec - chassis2.header().timestamp_sec() >
+             FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateChassis]: the given time stamp[" << timestamp_sec
+           << "] is newer than the 2nd message["
+           << chassis2.header().timestamp_sec() << "]";
+    *chassis_msg = chassis1;
+  } else {
+    *chassis_msg = chassis1;
+    chassis_msg->mutable_header()->set_timestamp_sec(timestamp_sec);
+
+    double time_diff =
+        chassis2.header().timestamp_sec() - chassis1.header().timestamp_sec();
+    if (fabs(time_diff) >= 0.001) {
+      double frac1 =
+          (timestamp_sec - chassis1.header().timestamp_sec()) / time_diff;
+
+      double frac2 = 1.0 - frac1;
+      if (chassis1.has_speed_mps()) {
+        float val = 0.0;
+        if (!std::isnan(chassis1.speed_mps()) &&
+            !std::isnan(chassis2.speed_mps())) {
+          val = chassis1.speed_mps() * frac2 + chassis2.speed_mps() * frac1;
+        }
+        chassis_msg->set_speed_mps(val);
+      }
+
+      if (chassis1.has_odometer_m()) {
+        float val = 0.0;
+        if (!std::isnan(chassis1.odometer_m()) &&
+            !std::isnan(chassis2.odometer_m())) {
+          val = chassis1.odometer_m() * frac2 + chassis2.odometer_m() * frac1;
+        }
+        chassis_msg->set_odometer_m(val);
+      }
+    }
+  }
+  return true;
+}
 
 void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
   Gps gps;
@@ -753,9 +955,10 @@ void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
              pose.position().y() - gps_pose.position().y(), &flu_x, &flu_y);
 
   double flu_vx, flu_vy;
-  RotateAxis(gps_heading, pose.linear_velocity().x() - gps_pose.position().x(),
-             pose.linear_velocity().y() - gps_pose.position().y(), &flu_vx,
-             &flu_vy);
+  RotateAxis(gps_heading,
+             pose.linear_velocity().x() - gps_pose.linear_velocity().x(),
+             pose.linear_velocity().y() - gps_pose.linear_velocity().y(),
+             &flu_vx, &flu_vy);
 
   ADEBUG << "timestamp [" << timestamp_sec << "]";
   ADEBUG << "true heading [" << gps_heading << "]";
@@ -765,8 +968,8 @@ void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
   ADEBUG << "heading error [" << heading - gps_heading << "]";
   ADEBUG << "station error [" << flu_x << "]";
   ADEBUG << "lateral error [" << flu_y << "]";
-  ADEBUG << "velocity station error [" << flu_x << "]";
-  ADEBUG << "velocity lateral error [" << flu_y << "]";
+  ADEBUG << "velocity station error [" << flu_vx << "]";
+  ADEBUG << "velocity lateral error [" << flu_vy << "]";
 }
 
 void LMDLocalization::RunWatchDog() {

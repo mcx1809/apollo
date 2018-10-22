@@ -19,6 +19,7 @@ cc_library(
         "pc_registrator.h",
     ],
     deps = [
+        "//modules/canbus/proto:canbus_proto",
         "//modules/common",
         "//modules/common/adapters:adapter_manager",
         "//modules/common/monitor_log",

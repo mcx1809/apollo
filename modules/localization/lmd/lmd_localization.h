@@ -30,10 +30,12 @@
 
 #include "ros/include/ros/ros.h"
 
+#include "modules/canbus/proto/chassis.pb.h"
 #include "modules/localization/proto/gps.pb.h"
 #include "modules/localization/proto/imu.pb.h"
 #include "modules/localization/proto/localization.pb.h"
 
+#include "modules/common/math/kalman_filter.h"
 #include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/status/status.h"
 #include "modules/localization/lmd/lm_provider.h"
@@ -41,7 +43,6 @@
 #include "modules/localization/lmd/pc_map.h"
 #include "modules/localization/lmd/pc_registrator.h"
 #include "modules/localization/localization_base.h"
-#include "modules/common/math/kalman_filter.h"
 
 /**
  * @namespace apollo::localization
@@ -83,17 +84,19 @@ class LMDLocalization : public LocalizationBase {
                    double new_timestamp_sec, Pose *new_pose);
   bool FindMatchingGPS(double timestamp_sec, Gps *gps_msg);
   bool FindMatchingIMU(double timestamp_sec, CorrectedImu *imu_msg);
+
+  bool InterpolateChassis(const apollo::canbus::Chassis &chassis1,
+                          const apollo::canbus::Chassis &chassis2,
+                          const double timestamp_sec,
+                          apollo::canbus::Chassis *chassis_msg);
+
+  bool FindMatchingChassis(double timestamp_sec,
+                           apollo::canbus::Chassis *chassis_msg);
   void PrintPoseError(const Pose &pose, double timestamp_sec);
   void RunWatchDog();
 
-  void InitKFENUPredictor(const Pose& pose);
-  void UpdateKFENUPredictor(const Pose& pose,double delta_ts);
-
-      /**
-   * @brief Get the motion Kalman filter.
-   * @return The motion Kalman filter.
-   */
-  const common::math::KalmanFilter<double, 9, 3, 0>& Kf_Enu_Predictor() const;
+  void InitKFENUPredictor(const Pose &pose);
+  void UpdateKFENUPredictor(const Pose &pose, double delta_ts);
 
  private:
   ros::Timer timer_;
@@ -107,7 +110,7 @@ class LMDLocalization : public LocalizationBase {
   Pose last_pose_;
   double last_pose_timestamp_sec_;
 
-  common::math::KalmanFilter<double, 9, 3, 0> kf_enu_predictor_;
+  common::math::KalmanFilter<double, 3, 3, 6> kf_enu_predictor_;
 };
 
 }  // namespace localization
