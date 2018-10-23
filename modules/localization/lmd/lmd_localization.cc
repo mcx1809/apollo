@@ -945,24 +945,31 @@ bool LMDLocalization::PredictByLinearIntergrate2(const Pose &old_pose,
     auto orientation = new_pose->orientation();
     auto orientation_1 = orientation;
 
-    // TODO(all): add FLAGS_enable_map_reference_unify
-    Eigen::Vector3d orig(imu.imu().linear_acceleration().x(),
-                         imu.imu().linear_acceleration().y(),
-                         imu.imu().linear_acceleration().z());
-    auto vec = QuaternionRotate(orientation, orig);
     Point3D linear_acceleration;
-    linear_acceleration.set_x(vec[0]);
-    linear_acceleration.set_y(vec[1]);
-    linear_acceleration.set_z(vec[2]);
+    if (FLAGS_enable_map_reference_unify) {
+      Eigen::Vector3d orig(imu.imu().linear_acceleration().x(),
+                           imu.imu().linear_acceleration().y(),
+                           imu.imu().linear_acceleration().z());
+      auto vec = QuaternionRotate(orientation, orig);
+      linear_acceleration.set_x(vec[0]);
+      linear_acceleration.set_y(vec[1]);
+      linear_acceleration.set_z(vec[2]);
+    } else {
+      linear_acceleration.CopyFrom(imu.imu().linear_acceleration());
+    }
 
-    orig = Eigen::Vector3d(imu_1.imu().linear_acceleration().x(),
+    Point3D linear_acceleration_1;
+    if (FLAGS_enable_map_reference_unify) {
+      Eigen::Vector3d orig(imu_1.imu().linear_acceleration().x(),
                            imu_1.imu().linear_acceleration().y(),
                            imu_1.imu().linear_acceleration().z());
-    vec = QuaternionRotate(orientation_1, orig);
-    Point3D linear_acceleration_1;
-    linear_acceleration_1.set_x(vec[0]);
-    linear_acceleration_1.set_y(vec[1]);
-    linear_acceleration_1.set_z(vec[2]);
+      auto vec = QuaternionRotate(orientation_1, orig);
+      linear_acceleration_1.set_x(vec[0]);
+      linear_acceleration_1.set_y(vec[1]);
+      linear_acceleration_1.set_z(vec[2]);
+    } else {
+      linear_acceleration_1.CopyFrom(imu_1.imu().linear_acceleration());
+    }
 
     auto linear_velocity = new_pose->linear_velocity();
     Point3D linear_velocity_1;
