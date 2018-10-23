@@ -70,6 +70,12 @@ DEFINE_double(report_gps_imu_time_diff_threshold, 0.02,
 DEFINE_bool(enable_gps_timestamp, false,
             "True to set gps timestamp as localization header timestamp");
 
+DEFINE_bool(enable_lmd_mapping, false,
+            "True to enable realtime mapping for lmd");
+DEFINE_bool(enable_lmd_imu_filter, false, "True to enable imu filter for lmd");
+DEFINE_bool(enable_lmd_chassis_speed, false,
+            "True to get speed from chassis for lmd");
+
 // msf parame
 DEFINE_string(local_map_name, "local_map", "The path of localization map.");
 DEFINE_string(lidar_extrinsics_file,

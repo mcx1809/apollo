@@ -19,6 +19,7 @@
 
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/log.h"
+#include "modules/common/math/euler_angles_zxy.h"
 #include "modules/common/math/math_utils.h"
 #include "modules/common/math/quaternion.h"
 #include "modules/localization/common/localization_gflags.h"
@@ -29,6 +30,7 @@ namespace localization {
 using apollo::canbus::Chassis;
 using apollo::common::Point3D;
 using apollo::common::PointENU;
+using apollo::common::Quaternion;
 using apollo::common::Status;
 using apollo::common::adapter::AdapterManager;
 using apollo::common::adapter::ChassisAdapter;
@@ -196,6 +198,60 @@ static bool InterpolateIMU(const CorrectedImu &imu1, const CorrectedImu &imu2,
   return true;
 }
 
+static bool InterpolateChassis(const Chassis &chassis1, const Chassis &chassis2,
+                               const double timestamp_sec,
+                               Chassis *chassis_msg) {
+  if (!(chassis1.has_header() && chassis1.header().has_timestamp_sec() &&
+        chassis2.has_header() && chassis2.header().has_timestamp_sec())) {
+    AERROR
+        << "chassis1 and chassis2 has no header or no timestamp_sec in header";
+    return false;
+  }
+  if (timestamp_sec - chassis1.header().timestamp_sec() <
+      FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateChassis]: the given time stamp[" << timestamp_sec
+           << "] is older than the 1st message["
+           << chassis1.header().timestamp_sec() << "]";
+    *chassis_msg = chassis1;
+  } else if (timestamp_sec - chassis2.header().timestamp_sec() >
+             FLAGS_timestamp_sec_tolerance) {
+    AERROR << "[InterpolateChassis]: the given time stamp[" << timestamp_sec
+           << "] is newer than the 2nd message["
+           << chassis2.header().timestamp_sec() << "]";
+    *chassis_msg = chassis1;
+  } else {
+    *chassis_msg = chassis1;
+    chassis_msg->mutable_header()->set_timestamp_sec(timestamp_sec);
+
+    double time_diff =
+        chassis2.header().timestamp_sec() - chassis1.header().timestamp_sec();
+    if (fabs(time_diff) >= 0.001) {
+      double frac1 =
+          (timestamp_sec - chassis1.header().timestamp_sec()) / time_diff;
+
+      double frac2 = 1.0 - frac1;
+      if (chassis1.has_speed_mps()) {
+        float val = 0.0;
+        if (!std::isnan(chassis1.speed_mps()) &&
+            !std::isnan(chassis2.speed_mps())) {
+          val = chassis1.speed_mps() * frac2 + chassis2.speed_mps() * frac1;
+        }
+        chassis_msg->set_speed_mps(val);
+      }
+
+      if (chassis1.has_odometer_m()) {
+        float val = 0.0;
+        if (!std::isnan(chassis1.odometer_m()) &&
+            !std::isnan(chassis2.odometer_m())) {
+          val = chassis1.odometer_m() * frac2 + chassis2.odometer_m() * frac1;
+        }
+        chassis_msg->set_odometer_m(val);
+      }
+    }
+  }
+  return true;
+}
+
 static void FillPoseFromImu(const Pose &imu, Pose *pose) {
   // linear acceleration
   if (imu.has_linear_acceleration()) {
@@ -211,7 +267,7 @@ static void FillPoseFromImu(const Pose &imu, Pose *pose) {
         pose->mutable_linear_acceleration()->set_y(vec[1]);
         pose->mutable_linear_acceleration()->set_z(vec[2]);
 
-        // linear_acceleration_vfr
+        // linear_acceleration_vrf
         pose->mutable_linear_acceleration_vrf()->CopyFrom(
             imu.linear_acceleration());
       } else {
@@ -237,7 +293,7 @@ static void FillPoseFromImu(const Pose &imu, Pose *pose) {
         pose->mutable_angular_velocity()->set_y(vec[1]);
         pose->mutable_angular_velocity()->set_z(vec[2]);
 
-        // angular_velocity_vf
+        // angular_velocity_vrf
         pose->mutable_angular_velocity_vrf()->CopyFrom(imu.angular_velocity());
       } else {
         AERROR << "[PrepareLocalizationMsg]: "
@@ -347,25 +403,24 @@ void LMDLocalization::OnPerceptionObstacles(
     double heading;
     pc_registrator_.Register(source_points, position_estimated,
                              heading_estimated, &position, &heading);
-    ADEBUG << "before pc registration, x[" << position_estimated.x() << "], y["
-           << position_estimated.y() << "], z[" << position_estimated.z()
-           << "], heading[" << heading_estimated << "]";
-    ADEBUG << "after pc registration, x[" << position.x() << "], y["
-           << position.y() << "], z[" << position.z() << "], heading["
-           << heading << "]";
+
     // update pc_map_ to contain perception lane_markers
-    auto source_lanes =
-        pc_map_.PrepareLaneMarkers(lane_markers, position, heading,
-                                   kPointsNumInsertToMap, kInsertMapLaneLength);
-    for (auto lane : source_lanes) {
-      pc_map_.LoadLaneMarker(lane);
+    if (FLAGS_enable_lmd_mapping) {
+      auto source_lanes = pc_map_.PrepareLaneMarkers(
+          lane_markers, position, heading, kPointsNumInsertToMap,
+          kInsertMapLaneLength);
+      for (auto lane : source_lanes) {
+        pc_map_.LoadLaneMarker(lane);
+      }
     }
+
     // position
     // world frame -> map frame
     new_pose.mutable_position()->set_x(position.x() - map_offset_[0]);
     new_pose.mutable_position()->set_y(position.y() - map_offset_[1]);
     new_pose.mutable_position()->set_z(position.z() - map_offset_[2]);
 
+    // TODO(all):
     // orientation
     new_pose.set_heading(heading);
     auto orientation = HeadingToQuaternion(heading);
@@ -374,18 +429,14 @@ void LMDLocalization::OnPerceptionObstacles(
     new_pose.mutable_orientation()->set_qz(orientation.z());
     new_pose.mutable_orientation()->set_qw(orientation.w());
 
-    // linear velocity
-    auto dt = timestamp_sec - last_pose_timestamp_sec_;
-    const auto &last_position = last_pose_.position();
-    new_pose.mutable_linear_velocity()->set_x(
-        (position.x() - last_position.x()) / dt);
-    new_pose.mutable_linear_velocity()->set_x(
-        (position.y() - last_position.y()) / dt);
-    new_pose.mutable_linear_velocity()->set_x(
-        (position.z() - last_position.z()) / dt);
+    ADEBUG << "before pc registration";
+    PrintPoseError(last_pose_, last_pose_timestamp_sec_);
 
     last_pose_.CopyFrom(new_pose);
     last_pose_timestamp_sec_ = timestamp_sec;
+
+    ADEBUG << "after pc registration";
+    PrintPoseError(last_pose_, last_pose_timestamp_sec_);
   }
 }
 
@@ -445,9 +496,6 @@ void LMDLocalization::PrepareLocalizationMsg(
 
   // pose
   localization->mutable_pose()->CopyFrom(last_pose_);
-
-  // print error
-  PrintPoseError(last_pose_, last_pose_timestamp_sec_);
 }
 
 bool LMDLocalization::GetGpsPose(const Gps &gps, Pose *pose,
@@ -490,259 +538,15 @@ bool LMDLocalization::GetGpsPose(const Gps &gps, Pose *pose,
   return true;
 }
 
-void LMDLocalization::InitKFENUPredictor(const Pose &pose) {
-  // Set transition matrix F
-  Eigen::Matrix<double, 3, 3> F;
-  F.setIdentity();
-  kf_enu_predictor_.SetTransitionMatrix(F);
-
-  // Set observation matrix H
-  Eigen::Matrix<double, 3, 3> H;
-  H.setIdentity();
-  kf_enu_predictor_.SetObservationMatrix(H);
-
-  // Set control matrix
-  Eigen::Matrix<double, 3, 6> B;
-  B.setZero();
-  kf_enu_predictor_.SetControlMatrix(B);
-
-  // Set covariance of transition noise matrix Q
-  Eigen::Matrix<double, 3, 3> Q;
-  Q.setIdentity();
-  Q *= 5.0;
-  kf_enu_predictor_.SetTransitionNoise(Q);
-
-  // Set observation noise matrix R
-  Eigen::Matrix<double, 3, 3> R;
-  R.setIdentity();
-  R *= 5.0;
-  kf_enu_predictor_.SetObservationNoise(R);
-
-  // Set current state covariance matrix P
-  Eigen::Matrix<double, 3, 3> P;
-  P.setIdentity();
-  P *= 0.0001;
-
-  // Set initial state
-  Eigen::Matrix<double, 3, 1> x;
-  x.setZero();
-  x(0, 0) = pose.position().x();
-  x(1, 0) = pose.position().y();
-  x(2, 0) = pose.position().z();
-
-  kf_enu_predictor_.SetStateEstimate(x, P);
-}
-
-void LMDLocalization::UpdateKFENUPredictor(const Pose &pose, double delta_ts) {
-  Eigen::Matrix<double, 3, 6> B = kf_enu_predictor_.GetControlMatrix();
-  B(0, 0) = delta_ts;
-  B(0, 3) = 0.5 * delta_ts * delta_ts;
-  B(1, 1) = delta_ts;
-  B(1, 4) = 0.5 * delta_ts * delta_ts;
-  B(2, 2) = delta_ts;
-  B(2, 5) = 0.5 * delta_ts * delta_ts;
-  kf_enu_predictor_.SetControlMatrix(B);
-
-  // Set control vector
-  Eigen::Matrix<double, 6, 1> u;
-  u(0, 0) = pose.linear_velocity().x();
-  u(1, 0) = pose.linear_velocity().y();
-  u(2, 0) = pose.linear_velocity().z();
-  u(3, 0) = pose.linear_acceleration().x();
-  u(4, 0) = pose.linear_acceleration().y();
-  u(5, 0) = pose.linear_acceleration().z();
-
-  kf_enu_predictor_.Predict(u);
-
-  // Set observation vector
-  Eigen::Matrix<double, 3, 1> z;
-  z(0, 0) = pose.position().x();
-  z(1, 0) = pose.position().y();
-  z(2, 0) = pose.position().y();
-  kf_enu_predictor_.Correct(z);
-}
-
-bool LMDLocalization::PredictByKalman(const Pose &old_pose,
-                                      double old_timestamp_sec,
-                                      double new_timestamp_sec,
-                                      Pose *new_pose) {
-  double delta_ts = new_timestamp_sec - old_timestamp_sec;
-  new_pose->CopyFrom(old_pose);
-  if (!kf_enu_predictor_.IsInitialized()) {
-    InitKFENUPredictor(old_pose);
-  }
-  if (delta_ts > 0.0) {
-    UpdateKFENUPredictor(old_pose, delta_ts);
-  }
-
-  new_pose->mutable_position()->set_x(
-      kf_enu_predictor_.GetStateEstimate()(0, 0));
-
-  new_pose->mutable_position()->set_y(
-      kf_enu_predictor_.GetStateEstimate()(1, 0));
-
-  new_pose->mutable_position()->set_z(
-      kf_enu_predictor_.GetStateEstimate()(2, 0));
-
-  new_pose->mutable_linear_velocity()->set_x(
-      old_pose.linear_velocity().x() +
-      old_pose.linear_acceleration().x() * delta_ts);
-
-  new_pose->mutable_linear_velocity()->set_y(
-      old_pose.linear_velocity().y() +
-      old_pose.linear_acceleration().y() * delta_ts);
-
-  new_pose->mutable_linear_velocity()->set_z(
-      old_pose.linear_velocity().z() +
-      old_pose.linear_acceleration().z() * delta_ts);
-
-  ADEBUG << "Kalman estimate position :x[" << std::setprecision(6)
-         << new_pose->position().x() << std::fixed << "],y[ "
-         << std::setprecision(6) << new_pose->position().y() << std::fixed
-         << "], z[" << std::setprecision(6) << new_pose->position().z()
-         << std::fixed << "]";
-
-  ADEBUG << "Kalman v :Vx[" << std::setprecision(6)
-         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
-         << std::setprecision(6) << new_pose->linear_velocity().y()
-         << std::fixed << "], Vz[" << std::setprecision(6)
-         << new_pose->linear_velocity().z() << std::fixed << "]";
-  // IMU
-  CorrectedImu imu_msg;
-  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
-  CHECK(imu_msg.has_imu());
-  const auto &imu = imu_msg.imu();
-  FillPoseFromImu(imu, new_pose);
-  return true;
-}
-
-bool LMDLocalization::PredictByLinearIntergrate(const Pose &old_pose,
-                                      double old_timestamp_sec,
-                                      double new_timestamp_sec,
-                                      Pose *new_pose) {
-  double delta_ts = new_timestamp_sec - old_timestamp_sec;
-  new_pose->CopyFrom(old_pose);
-  double x = old_pose.position().x() +
-             old_pose.linear_velocity().x() * delta_ts +
-             0.5 * old_pose.linear_acceleration().x() * delta_ts * delta_ts;
-
-  double y = old_pose.position().y() +
-             old_pose.linear_velocity().y() * delta_ts +
-             0.5 * old_pose.linear_acceleration().y() * delta_ts * delta_ts;
-
-  double z = old_pose.position().z() +
-             old_pose.linear_velocity().z() * delta_ts +
-             0.5 * old_pose.linear_acceleration().z() * delta_ts * delta_ts;
-
-  new_pose->mutable_position()->set_x(x);
-
-  new_pose->mutable_position()->set_y(y);
-
-  new_pose->mutable_position()->set_z(z);
-
-  new_pose->mutable_linear_velocity()->set_x(
-      old_pose.linear_velocity().x() +
-      old_pose.linear_acceleration().x() * delta_ts);
-
-  new_pose->mutable_linear_velocity()->set_y(
-      old_pose.linear_velocity().y() +
-      old_pose.linear_acceleration().y() * delta_ts);
-
-  new_pose->mutable_linear_velocity()->set_z(
-      old_pose.linear_velocity().z() +
-      old_pose.linear_acceleration().z() * delta_ts);
-
-  ADEBUG << "Time is  :[" << std::setprecision(6) << delta_ts << "]";
-
-  ADEBUG << "linear estimate position :x[" << std::setprecision(6) << x
-         << std::fixed << "],y[ " << std::setprecision(6) << y << std::fixed
-         << "], z[" << std::setprecision(6) << z << std::fixed << "]";
-
-  ADEBUG << "linear v :Vx[" << std::setprecision(6)
-         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
-         << std::setprecision(6) << new_pose->linear_velocity().y()
-         << std::fixed << "], Vz[" << std::setprecision(6)
-         << new_pose->linear_velocity().z() << std::fixed << "]";
-  // IMU
-  CorrectedImu imu_msg;
-  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
-  CHECK(imu_msg.has_imu());
-  const auto &imu = imu_msg.imu();
-  FillPoseFromImu(imu, new_pose);
-  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
-         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
-         << std::setprecision(6) << old_pose.linear_acceleration().y()
-         << std::fixed << "], Az[" << std::setprecision(6)
-         << old_pose.linear_acceleration().z() << std::fixed << "]";
-
-  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
-         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
-         << std::setprecision(6) << new_pose->linear_acceleration().y()
-         << std::fixed << "], Az[" << std::setprecision(6)
-         << new_pose->linear_acceleration().z() << std::fixed << "]";
-
-  return true;
-}
-
-bool LMDLocalization::PredictByChassis(const Pose &old_pose,
-                                       double old_timestamp_sec,
-                                       double new_timestamp_sec,
-                                       Pose *new_pose) {
-  double delta_ts = new_timestamp_sec - old_timestamp_sec;
-  Chassis chassis;
-  if (!FindMatchingChassis(old_timestamp_sec, &chassis)) return false;
-  if (chassis.has_speed_mps()) {
-    double enu_x_velocity, enu_y_velocity;
-    RotateAxis(-old_pose.heading(), chassis.speed_mps(), 0, &enu_x_velocity,
-               &enu_y_velocity);
-    ADEBUG << "chassis speedmps :[" << std::setprecision(6)
-           << chassis.speed_mps() << std::fixed << "] ";
-    ADEBUG << "chassis v :Vx[" << std::setprecision(6) << enu_x_velocity
-           << std::fixed << "],Vy[ " << std::setprecision(6) << enu_y_velocity
-           << std::fixed << "]";
-
-    new_pose->mutable_position()->set_x(old_pose.position().x() +
-                                        enu_x_velocity * delta_ts);
-
-    new_pose->mutable_position()->set_y(old_pose.position().y() +
-                                        enu_y_velocity * delta_ts);
-  }
-
-  // IMU
-  CorrectedImu imu_msg;
-  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
-  CHECK(imu_msg.has_imu());
-  const auto &imu = imu_msg.imu();
-  FillPoseFromImu(imu, new_pose);
-  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
-         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
-         << std::setprecision(6) << old_pose.linear_acceleration().y()
-         << std::fixed << "], Az[" << std::setprecision(6)
-         << old_pose.linear_acceleration().z() << std::fixed << "]";
-
-  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
-         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
-         << std::setprecision(6) << new_pose->linear_acceleration().y()
-         << std::fixed << "], Az[" << std::setprecision(6)
-         << new_pose->linear_acceleration().z() << std::fixed << "]";
-
-  return true;
-}
-
 bool LMDLocalization::PredictPose(const Pose &old_pose,
                                   double old_timestamp_sec,
                                   double new_timestamp_sec, Pose *new_pose) {
-// TODO(all):
-#if 0
-  new_pose->CopyFrom(old_pose);
-#else
-  PredictByKalman(old_pose, old_timestamp_sec, new_timestamp_sec, new_pose);
-
-  // PredictByLinearIntergrate(old_pose,old_timestamp_sec,new_timestamp_sec,new_pose);
-
-  // PredictByChassis(old_pose,old_timestamp_sec,new_timestamp_sec,new_pose);
-#endif
-  return true;
+  if (FLAGS_enable_lmd_imu_filter)
+    return PredictByKalman(old_pose, old_timestamp_sec, new_timestamp_sec,
+                           new_pose);
+  else
+    return PredictByLinearIntergrate2(old_pose, old_timestamp_sec,
+                                      new_timestamp_sec, new_pose);
 }
 
 bool LMDLocalization::FindMatchingGPS(double timestamp_sec, Gps *gps_msg) {
@@ -857,6 +661,7 @@ bool LMDLocalization::FindMatchingIMU(double timestamp_sec,
   }
   return true;
 }
+
 bool LMDLocalization::FindMatchingChassis(double timestamp_sec,
                                           Chassis *chassis_msg) {
   auto *chassis_adapter = AdapterManager::GetChassis();
@@ -918,59 +723,410 @@ bool LMDLocalization::FindMatchingChassis(double timestamp_sec,
   return true;
 }
 
-bool LMDLocalization::InterpolateChassis(const Chassis &chassis1,
-                                         const Chassis &chassis2,
-                                         const double timestamp_sec,
-                                         Chassis *chassis_msg) {
-  if (!(chassis1.has_header() && chassis1.header().has_timestamp_sec() &&
-        chassis2.has_header() && chassis2.header().has_timestamp_sec())) {
-    AERROR
-        << "chassis1 and chassis2 has no header or no timestamp_sec in header";
+bool LMDLocalization::PredictByKalman(const Pose &old_pose,
+                                      double old_timestamp_sec,
+                                      double new_timestamp_sec,
+                                      Pose *new_pose) {
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
+  new_pose->CopyFrom(old_pose);
+  if (!kf_enu_predictor_.IsInitialized()) {
+    InitKFENUPredictor(old_pose);
+  }
+  if (delta_ts > 0.0) {
+    UpdateKFENUPredictor(old_pose, delta_ts);
+  }
+
+  new_pose->mutable_position()->set_x(
+      kf_enu_predictor_.GetStateEstimate()(0, 0));
+
+  new_pose->mutable_position()->set_y(
+      kf_enu_predictor_.GetStateEstimate()(1, 0));
+
+  new_pose->mutable_position()->set_z(
+      kf_enu_predictor_.GetStateEstimate()(2, 0));
+
+  new_pose->mutable_linear_velocity()->set_x(
+      old_pose.linear_velocity().x() +
+      old_pose.linear_acceleration().x() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_y(
+      old_pose.linear_velocity().y() +
+      old_pose.linear_acceleration().y() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_z(
+      old_pose.linear_velocity().z() +
+      old_pose.linear_acceleration().z() * delta_ts);
+
+  ADEBUG << "Kalman estimate position :x[" << std::setprecision(6)
+         << new_pose->position().x() << std::fixed << "],y[ "
+         << std::setprecision(6) << new_pose->position().y() << std::fixed
+         << "], z[" << std::setprecision(6) << new_pose->position().z()
+         << std::fixed << "]";
+
+  ADEBUG << "Kalman v :Vx[" << std::setprecision(6)
+         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
+         << std::setprecision(6) << new_pose->linear_velocity().y()
+         << std::fixed << "], Vz[" << std::setprecision(6)
+         << new_pose->linear_velocity().z() << std::fixed << "]";
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+  return true;
+}
+
+bool LMDLocalization::PredictByLinearIntergrate(const Pose &old_pose,
+                                                double old_timestamp_sec,
+                                                double new_timestamp_sec,
+                                                Pose *new_pose) {
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
+  new_pose->CopyFrom(old_pose);
+  double x = old_pose.position().x() +
+             old_pose.linear_velocity().x() * delta_ts +
+             0.5 * old_pose.linear_acceleration().x() * delta_ts * delta_ts;
+
+  double y = old_pose.position().y() +
+             old_pose.linear_velocity().y() * delta_ts +
+             0.5 * old_pose.linear_acceleration().y() * delta_ts * delta_ts;
+
+  double z = old_pose.position().z() +
+             old_pose.linear_velocity().z() * delta_ts +
+             0.5 * old_pose.linear_acceleration().z() * delta_ts * delta_ts;
+
+  new_pose->mutable_position()->set_x(x);
+
+  new_pose->mutable_position()->set_y(y);
+
+  new_pose->mutable_position()->set_z(z);
+
+  new_pose->mutable_linear_velocity()->set_x(
+      old_pose.linear_velocity().x() +
+      old_pose.linear_acceleration().x() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_y(
+      old_pose.linear_velocity().y() +
+      old_pose.linear_acceleration().y() * delta_ts);
+
+  new_pose->mutable_linear_velocity()->set_z(
+      old_pose.linear_velocity().z() +
+      old_pose.linear_acceleration().z() * delta_ts);
+
+  ADEBUG << "Time is  :[" << std::setprecision(6) << delta_ts << "]";
+
+  ADEBUG << "linear estimate position :x[" << std::setprecision(6) << x
+         << std::fixed << "],y[ " << std::setprecision(6) << y << std::fixed
+         << "], z[" << std::setprecision(6) << z << std::fixed << "]";
+
+  ADEBUG << "linear v :Vx[" << std::setprecision(6)
+         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
+         << std::setprecision(6) << new_pose->linear_velocity().y()
+         << std::fixed << "], Vz[" << std::setprecision(6)
+         << new_pose->linear_velocity().z() << std::fixed << "]";
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
+         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << old_pose.linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << old_pose.linear_acceleration().z() << std::fixed << "]";
+
+  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
+         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << new_pose->linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << new_pose->linear_acceleration().z() << std::fixed << "]";
+
+  return true;
+}
+
+bool LMDLocalization::PredictByLinearIntergrate2(const Pose &old_pose,
+                                                 double old_timestamp_sec,
+                                                 double new_timestamp_sec,
+                                                 Pose *new_pose) {
+  if (!old_pose.has_position() || !old_pose.has_orientation() ||
+      !old_pose.has_linear_velocity()) {
+    AERROR << "old_pose has no some fields";
     return false;
   }
-  if (timestamp_sec - chassis1.header().timestamp_sec() <
-      FLAGS_timestamp_sec_tolerance) {
-    AERROR << "[InterpolateChassis]: the given time stamp[" << timestamp_sec
-           << "] is older than the 1st message["
-           << chassis1.header().timestamp_sec() << "]";
-    *chassis_msg = chassis1;
-  } else if (timestamp_sec - chassis2.header().timestamp_sec() >
-             FLAGS_timestamp_sec_tolerance) {
-    AERROR << "[InterpolateChassis]: the given time stamp[" << timestamp_sec
-           << "] is newer than the 2nd message["
-           << chassis2.header().timestamp_sec() << "]";
-    *chassis_msg = chassis1;
+
+  auto *imu_adapter = AdapterManager::GetImu();
+  if (imu_adapter->Empty()) {
+    AERROR << "Cannot find Matching IMU. "
+           << "IMU message Queue is empty!";
+    return false;
+  }
+
+  auto imu_it = imu_adapter->end();
+  do {
+    imu_it--;
+    if ((*imu_it)->header().timestamp_sec() - old_timestamp_sec >
+        FLAGS_timestamp_sec_tolerance)
+      break;
+  } while (imu_it != imu_adapter->begin());
+  imu_it++;
+
+  if (imu_it == imu_adapter->end()) {
+    AERROR << std::setprecision(15)
+           << "IMU queue too short or request too old. "
+           << "Oldest timestamp["
+           << imu_adapter->GetOldestObserved().header().timestamp_sec()
+           << "], Newest timestamp["
+           << imu_adapter->GetLatestObserved().header().timestamp_sec()
+           << "], timestamp[" << old_timestamp_sec << "]";
+    return false;
+  }
+
+  CorrectedImu imu;
+  if (imu_it != imu_adapter->begin()) {
+    auto imu_it_1 = imu_it;
+    imu_it_1--;
+    if (!(*imu_it)->has_header() || !(*imu_it_1)->has_header() ||
+        !(*imu_it)->has_imu() || !(*imu_it_1)->has_imu()) {
+      AERROR << "imu_it and imu_it_1 must both have header or some fields.";
+      return false;
+    }
+    if (!InterpolateIMU(**imu_it, **imu_it_1, old_timestamp_sec, &imu)) {
+      AERROR << "failed to interpolate IMU";
+      return false;
+    }
   } else {
-    *chassis_msg = chassis1;
-    chassis_msg->mutable_header()->set_timestamp_sec(timestamp_sec);
+    imu.CopyFrom(**imu_it);
+  }
 
-    double time_diff =
-        chassis2.header().timestamp_sec() - chassis1.header().timestamp_sec();
-    if (fabs(time_diff) >= 0.001) {
-      double frac1 =
-          (timestamp_sec - chassis1.header().timestamp_sec()) / time_diff;
+  new_pose->CopyFrom(old_pose);
+  auto timestamp_sec = old_timestamp_sec;
+  bool finished = false;
+  while (!finished) {
+    CorrectedImu imu_1;
+    double timestamp_sec_1;
 
-      double frac2 = 1.0 - frac1;
-      if (chassis1.has_speed_mps()) {
-        float val = 0.0;
-        if (!std::isnan(chassis1.speed_mps()) &&
-            !std::isnan(chassis2.speed_mps())) {
-          val = chassis1.speed_mps() * frac2 + chassis2.speed_mps() * frac1;
-        }
-        chassis_msg->set_speed_mps(val);
+    auto imu_it_1 = imu_it;
+    if (imu_it_1 != imu_adapter->begin()) {
+      imu_it_1--;
+
+      if (!(*imu_it_1)->has_header() ||
+          !(*imu_it_1)->header().has_timestamp_sec()) {
+        AERROR << "imu_it_1 must have header and timestamp_sec.";
+        return false;
       }
 
-      if (chassis1.has_odometer_m()) {
-        float val = 0.0;
-        if (!std::isnan(chassis1.odometer_m()) &&
-            !std::isnan(chassis2.odometer_m())) {
-          val = chassis1.odometer_m() * frac2 + chassis2.odometer_m() * frac1;
+      timestamp_sec_1 = (*imu_it_1)->header().timestamp_sec();
+      if (timestamp_sec_1 < new_timestamp_sec) {
+        imu_1.CopyFrom(**imu_it_1);
+      } else {
+        timestamp_sec_1 = new_timestamp_sec;
+        if (!InterpolateIMU(**imu_it, **imu_it_1, timestamp_sec_1, &imu_1)) {
+          AERROR << "failed to interpolate IMU";
+          return false;
         }
-        chassis_msg->set_odometer_m(val);
+        finished = true;
       }
+    } else {
+      timestamp_sec_1 = new_timestamp_sec;
+      imu_1.CopyFrom(imu);
+      finished = true;
+    }
+
+    if (!imu.has_imu() || !imu_1.has_imu() ||
+        !imu.imu().has_linear_acceleration() ||
+        !imu_1.imu().has_linear_acceleration() ||
+        !imu.imu().has_angular_velocity() ||
+        !imu_1.imu().has_angular_velocity()) {
+      AERROR << "imu or imu1 has no some fields";
+      return false;
+    }
+
+    // auto angular_velocity = imu.imu().angular_velocity();
+    // auto angular_velocity1 = imu_1.imu().angular_velocity();
+    auto orientation = new_pose->orientation();
+    auto orientation_1 = orientation;
+
+    // TODO(all): add FLAGS_enable_map_reference_unify
+    Eigen::Vector3d orig(imu.imu().linear_acceleration().x(),
+                         imu.imu().linear_acceleration().y(),
+                         imu.imu().linear_acceleration().z());
+    auto vec = QuaternionRotate(orientation, orig);
+    Point3D linear_acceleration;
+    linear_acceleration.set_x(vec[0]);
+    linear_acceleration.set_y(vec[1]);
+    linear_acceleration.set_z(vec[2]);
+
+    orig = Eigen::Vector3d(imu_1.imu().linear_acceleration().x(),
+                           imu_1.imu().linear_acceleration().y(),
+                           imu_1.imu().linear_acceleration().z());
+    vec = QuaternionRotate(orientation_1, orig);
+    Point3D linear_acceleration_1;
+    linear_acceleration_1.set_x(vec[0]);
+    linear_acceleration_1.set_y(vec[1]);
+    linear_acceleration_1.set_z(vec[2]);
+
+    auto linear_velocity = new_pose->linear_velocity();
+    Point3D linear_velocity_1;
+    auto dt = timestamp_sec_1 - timestamp_sec;
+    linear_velocity_1.set_x(
+        (linear_acceleration.x() + linear_acceleration_1.x()) / 2.0 * dt +
+        linear_velocity.x());
+    linear_velocity_1.set_y(
+        (linear_acceleration.y() + linear_acceleration_1.y()) / 2.0 * dt +
+        linear_velocity.y());
+    linear_velocity_1.set_z(
+        (linear_acceleration.z() + linear_acceleration_1.z()) / 2.0 * dt +
+        linear_velocity.z());
+
+    auto position = new_pose->position();
+    PointENU position_1;
+    position_1.set_x(
+        (linear_acceleration.x() / 3.0 + linear_acceleration_1.x() / 6.0) * dt *
+            dt +
+        linear_velocity.x() * dt + position.x());
+    position_1.set_y(
+        (linear_acceleration.y() / 3.0 + linear_acceleration_1.y() / 6.0) * dt *
+            dt +
+        linear_velocity.y() * dt + position.y());
+    position_1.set_z(
+        (linear_acceleration.z() / 3.0 + linear_acceleration_1.z() / 6.0) * dt *
+            dt +
+        linear_velocity.z() * dt + position.z());
+
+    new_pose->mutable_position()->CopyFrom(position_1);
+    new_pose->mutable_orientation()->CopyFrom(orientation_1);
+    new_pose->set_heading(QuaternionToHeading(
+        new_pose->orientation().qw(), new_pose->orientation().qx(),
+        new_pose->orientation().qy(), new_pose->orientation().qz()));
+    new_pose->mutable_linear_velocity()->CopyFrom(linear_velocity_1);
+    FillPoseFromImu(imu_1.imu(), new_pose);
+
+    if (!finished) {
+      timestamp_sec = timestamp_sec_1;
+      imu_it = imu_it_1;
+      imu.CopyFrom(imu_1);
     }
   }
+
   return true;
+}
+
+bool LMDLocalization::PredictByChassis(const Pose &old_pose,
+                                       double old_timestamp_sec,
+                                       double new_timestamp_sec,
+                                       Pose *new_pose) {
+  double delta_ts = new_timestamp_sec - old_timestamp_sec;
+  Chassis chassis;
+  if (!FindMatchingChassis(old_timestamp_sec, &chassis)) return false;
+  if (chassis.has_speed_mps()) {
+    double enu_x_velocity, enu_y_velocity;
+    RotateAxis(-old_pose.heading(), chassis.speed_mps(), 0, &enu_x_velocity,
+               &enu_y_velocity);
+    ADEBUG << "chassis speedmps :[" << std::setprecision(6)
+           << chassis.speed_mps() << std::fixed << "] ";
+    ADEBUG << "chassis v :Vx[" << std::setprecision(6) << enu_x_velocity
+           << std::fixed << "],Vy[ " << std::setprecision(6) << enu_y_velocity
+           << std::fixed << "]";
+
+    new_pose->mutable_position()->set_x(old_pose.position().x() +
+                                        enu_x_velocity * delta_ts);
+
+    new_pose->mutable_position()->set_y(old_pose.position().y() +
+                                        enu_y_velocity * delta_ts);
+  }
+
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
+         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << old_pose.linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << old_pose.linear_acceleration().z() << std::fixed << "]";
+
+  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
+         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
+         << std::setprecision(6) << new_pose->linear_acceleration().y()
+         << std::fixed << "], Az[" << std::setprecision(6)
+         << new_pose->linear_acceleration().z() << std::fixed << "]";
+
+  return true;
+}
+
+void LMDLocalization::InitKFENUPredictor(const Pose &pose) {
+  // Set transition matrix F
+  Eigen::Matrix<double, 3, 3> F;
+  F.setIdentity();
+  kf_enu_predictor_.SetTransitionMatrix(F);
+
+  // Set observation matrix H
+  Eigen::Matrix<double, 3, 3> H;
+  H.setIdentity();
+  kf_enu_predictor_.SetObservationMatrix(H);
+
+  // Set control matrix
+  Eigen::Matrix<double, 3, 6> B;
+  B.setZero();
+  kf_enu_predictor_.SetControlMatrix(B);
+
+  // Set covariance of transition noise matrix Q
+  Eigen::Matrix<double, 3, 3> Q;
+  Q.setIdentity();
+  Q *= 5.0;
+  kf_enu_predictor_.SetTransitionNoise(Q);
+
+  // Set observation noise matrix R
+  Eigen::Matrix<double, 3, 3> R;
+  R.setIdentity();
+  R *= 5.0;
+  kf_enu_predictor_.SetObservationNoise(R);
+
+  // Set current state covariance matrix P
+  Eigen::Matrix<double, 3, 3> P;
+  P.setIdentity();
+  P *= 0.0001;
+
+  // Set initial state
+  Eigen::Matrix<double, 3, 1> x;
+  x.setZero();
+  x(0, 0) = pose.position().x();
+  x(1, 0) = pose.position().y();
+  x(2, 0) = pose.position().z();
+
+  kf_enu_predictor_.SetStateEstimate(x, P);
+}
+
+void LMDLocalization::UpdateKFENUPredictor(const Pose &pose, double delta_ts) {
+  Eigen::Matrix<double, 3, 6> B = kf_enu_predictor_.GetControlMatrix();
+  B(0, 0) = delta_ts;
+  B(0, 3) = 0.5 * delta_ts * delta_ts;
+  B(1, 1) = delta_ts;
+  B(1, 4) = 0.5 * delta_ts * delta_ts;
+  B(2, 2) = delta_ts;
+  B(2, 5) = 0.5 * delta_ts * delta_ts;
+  kf_enu_predictor_.SetControlMatrix(B);
+
+  // Set control vector
+  Eigen::Matrix<double, 6, 1> u;
+  u(0, 0) = pose.linear_velocity().x();
+  u(1, 0) = pose.linear_velocity().y();
+  u(2, 0) = pose.linear_velocity().z();
+  u(3, 0) = pose.linear_acceleration().x();
+  u(4, 0) = pose.linear_acceleration().y();
+  u(5, 0) = pose.linear_acceleration().z();
+
+  kf_enu_predictor_.Predict(u);
+
+  // Set observation vector
+  Eigen::Matrix<double, 3, 1> z;
+  z(0, 0) = pose.position().x();
+  z(1, 0) = pose.position().y();
+  z(2, 0) = pose.position().y();
+  kf_enu_predictor_.Correct(z);
 }
 
 void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
@@ -993,26 +1149,32 @@ void LMDLocalization::PrintPoseError(const Pose &pose, double timestamp_sec) {
       gps_pose.orientation().qw(), gps_pose.orientation().qx(),
       gps_pose.orientation().qy(), gps_pose.orientation().qz());
 
-  double flu_x, flu_y;
-  RotateAxis(gps_heading, pose.position().x() - gps_pose.position().x(),
-             pose.position().y() - gps_pose.position().y(), &flu_x, &flu_y);
-
   double flu_vx, flu_vy;
-  RotateAxis(gps_heading,
-             pose.linear_velocity().x() - gps_pose.linear_velocity().x(),
-             pose.linear_velocity().y() - gps_pose.linear_velocity().y(),
-             &flu_vx, &flu_vy);
+  RotateAxis(gps_heading, gps_pose.linear_velocity().x(),
+             gps_pose.linear_velocity().y(), &flu_vx, &flu_vy);
 
-  ADEBUG << "timestamp [" << timestamp_sec << "]";
-  ADEBUG << "true heading [" << gps_heading << "]";
+  double flu_dx, flu_dy;
+  RotateAxis(gps_heading, pose.position().x() - gps_pose.position().x(),
+             pose.position().y() - gps_pose.position().y(), &flu_dx, &flu_dy);
+
+  double flu_dvx, flu_dvy;
+  RotateAxis(gps_heading, pose.linear_velocity().x(),
+             pose.linear_velocity().y(), &flu_dvx, &flu_dvy);
+  flu_dvx -= flu_vx;
+  flu_dvy -= flu_vy;
+
+  ADEBUG << "timestamp[" << timestamp_sec << "]";
+  ADEBUG << "true heading[" << gps_heading << "]";
+  ADEBUG << "heading error[" << heading - gps_heading << "]";
   ADEBUG << "true position, x[" << gps_pose.position().x() << "], y["
          << gps_pose.position().y() << "], z[" << gps_pose.position().z()
          << "]";
-  ADEBUG << "heading error [" << heading - gps_heading << "]";
-  ADEBUG << "station error [" << flu_x << "]";
-  ADEBUG << "lateral error [" << flu_y << "]";
-  ADEBUG << "velocity station error [" << flu_vx << "]";
-  ADEBUG << "velocity lateral error [" << flu_vy << "]";
+  ADEBUG << "position error, station[" << flu_dx << "], lateral[" << flu_dy
+         << "]";
+  ADEBUG << "true velocity, station[" << flu_vx << "], lateral[" << flu_vy
+         << "]";
+  ADEBUG << "velocity error, station[" << flu_dvx << "], lateral[" << flu_dvy
+         << "]";
 }
 
 void LMDLocalization::RunWatchDog() {

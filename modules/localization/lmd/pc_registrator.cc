@@ -41,7 +41,8 @@ constexpr int kXOptRatio = 6;
 constexpr int kYOptRatio = 6;
 constexpr int kOptIterNum = 4;
 constexpr double kNotFoundError = 20.0;
-constexpr double kMovingCostRatio = 0.25;
+constexpr double kMovingXCostRatio = 0.25;
+constexpr double kMovingYCostRatio = 1.0 - kMovingXCostRatio;
 }  // namespace
 
 PCRegistrator::PCRegistrator(PCMap* map) {
@@ -80,10 +81,12 @@ void PCRegistrator::Register(const std::vector<PCSourcePoint>& source_points,
           auto error =
               ComputeError(source_points, position_testing, heading_testing);
 
-          error += Vec2d(position_estimated.x(), position_estimated.y())
-                       .DistanceSquareTo(
-                           Vec2d(position_testing.x(), position_testing.y())) *
-                   kMovingCostRatio;
+          double flu_x, flu_y;
+          RotateAxis(
+              heading_estimated, position_testing.x() - position_estimated.x(),
+              position_testing.y() - position_estimated.y(), &flu_x, &flu_y);
+          error += std::sqrt(flu_x * flu_x * kMovingXCostRatio +
+                             flu_y * flu_y * kMovingYCostRatio);
 
           if (error < current_error) {
             current_error = error;
@@ -171,9 +174,6 @@ double PCRegistrator::ComputeError(
     // get error
     error += std::sqrt(d2);
   }
-
-  // error *= static_cast<double>(source_points.size()) /
-  //         (source_points.size() - not_found);
 
   return error;
 }

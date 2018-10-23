@@ -82,30 +82,27 @@ class LMDLocalization : public LocalizationBase {
   bool GetGpsPose(const Gps &gps, Pose *pose, double *timestamp_sec);
   bool PredictPose(const Pose &old_pose, double old_timestamp_sec,
                    double new_timestamp_sec, Pose *new_pose);
+
   bool FindMatchingGPS(double timestamp_sec, Gps *gps_msg);
   bool FindMatchingIMU(double timestamp_sec, CorrectedImu *imu_msg);
-
-  bool InterpolateChassis(const apollo::canbus::Chassis &chassis1,
-                          const apollo::canbus::Chassis &chassis2,
-                          const double timestamp_sec,
-                          apollo::canbus::Chassis *chassis_msg);
-
   bool FindMatchingChassis(double timestamp_sec,
                            apollo::canbus::Chassis *chassis_msg);
-  void PrintPoseError(const Pose &pose, double timestamp_sec);
-  void RunWatchDog();
+
+  bool PredictByKalman(const Pose &old_pose, double old_timestamp_sec,
+                       double new_timestamp_sec, Pose *new_pose);
+  bool PredictByLinearIntergrate(const Pose &old_pose, double old_timestamp_sec,
+                                 double new_timestamp_sec, Pose *new_pose);
+  bool PredictByLinearIntergrate2(const Pose &old_pose,
+                                  double old_timestamp_sec,
+                                  double new_timestamp_sec, Pose *new_pose);
+  bool PredictByChassis(const Pose &old_pose, double old_timestamp_sec,
+                        double new_timestamp_sec, Pose *new_pose);
 
   void InitKFENUPredictor(const Pose &pose);
   void UpdateKFENUPredictor(const Pose &pose, double delta_ts);
 
-  bool PredictByKalman(const Pose &old_pose, double old_timestamp_sec,
-                       double new_timestamp_sec, Pose *new_pose);
-
-  bool PredictByLinearIntergrate(const Pose &old_pose, double old_timestamp_sec,
-                       double new_timestamp_sec, Pose *new_pose);
-
-  bool PredictByChassis(const Pose &old_pose, double old_timestamp_sec,
-                        double new_timestamp_sec, Pose *new_pose);
+  void PrintPoseError(const Pose &pose, double timestamp_sec);
+  void RunWatchDog();
 
  private:
   ros::Timer timer_;
