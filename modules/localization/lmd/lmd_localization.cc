@@ -364,8 +364,6 @@ void LMDLocalization::OnGps(const Gps &gps) {
 
 void LMDLocalization::OnPerceptionObstacles(
     const PerceptionObstacles &obstacles) {
-  //
-  return;
   if (has_last_pose_ && obstacles.has_lane_marker()) {
     if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec()) {
       AERROR << "obstacles has no header or no some fields";
