@@ -541,7 +541,7 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
                                   double new_timestamp_sec, Pose *new_pose) {
   if (FLAGS_enable_lmd_imu_filter)
     return PredictByKalman(old_pose, old_timestamp_sec, new_timestamp_sec,
-                           new_pose);
+                            new_pose);
   else
     return PredictByLinearIntergrate2(old_pose, old_timestamp_sec,
                                       new_timestamp_sec, new_pose);
@@ -727,6 +727,14 @@ bool LMDLocalization::PredictByKalman(const Pose &old_pose,
                                       Pose *new_pose) {
   double delta_ts = new_timestamp_sec - old_timestamp_sec;
   new_pose->CopyFrom(old_pose);
+
+  // IMU
+  CorrectedImu imu_msg;
+  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
+  CHECK(imu_msg.has_imu());
+  const auto &imu = imu_msg.imu();
+  FillPoseFromImu(imu, new_pose);
+
   if (!kf_enu_predictor_.IsInitialized()) {
     InitKFENUPredictor(old_pose);
   }
@@ -744,34 +752,23 @@ bool LMDLocalization::PredictByKalman(const Pose &old_pose,
       kf_enu_predictor_.GetStateEstimate()(2, 0));
 
   new_pose->mutable_linear_velocity()->set_x(
-      old_pose.linear_velocity().x() +
-      old_pose.linear_acceleration().x() * delta_ts);
+      old_pose.linear_velocity().x() + ((old_pose.linear_acceleration().x() +
+                                         new_pose->linear_acceleration().x()) /
+                                        2.0) *
+                                           delta_ts);
 
   new_pose->mutable_linear_velocity()->set_y(
-      old_pose.linear_velocity().y() +
-      old_pose.linear_acceleration().y() * delta_ts);
+      old_pose.linear_velocity().y() + ((old_pose.linear_acceleration().y() +
+                                         new_pose->linear_acceleration().y()) /
+                                        2.0) *
+                                           delta_ts);
 
   new_pose->mutable_linear_velocity()->set_z(
-      old_pose.linear_velocity().z() +
-      old_pose.linear_acceleration().z() * delta_ts);
+      old_pose.linear_velocity().z() + ((old_pose.linear_acceleration().z() +
+                                         new_pose->linear_acceleration().z()) /
+                                        2.0) *
+                                           delta_ts);
 
-  ADEBUG << "Kalman estimate position :x[" << std::setprecision(6)
-         << new_pose->position().x() << std::fixed << "],y[ "
-         << std::setprecision(6) << new_pose->position().y() << std::fixed
-         << "], z[" << std::setprecision(6) << new_pose->position().z()
-         << std::fixed << "]";
-
-  ADEBUG << "Kalman v :Vx[" << std::setprecision(6)
-         << new_pose->linear_velocity().x() << std::fixed << "],Vy[ "
-         << std::setprecision(6) << new_pose->linear_velocity().y()
-         << std::fixed << "], Vz[" << std::setprecision(6)
-         << new_pose->linear_velocity().z() << std::fixed << "]";
-  // IMU
-  CorrectedImu imu_msg;
-  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
-  CHECK(imu_msg.has_imu());
-  const auto &imu = imu_msg.imu();
-  FillPoseFromImu(imu, new_pose);
   return true;
 }
 
@@ -1021,6 +1018,8 @@ bool LMDLocalization::PredictByChassis(const Pose &old_pose,
                                        double old_timestamp_sec,
                                        double new_timestamp_sec,
                                        Pose *new_pose) {
+  new_pose->CopyFrom(old_pose);
+
   double delta_ts = new_timestamp_sec - old_timestamp_sec;
   Chassis chassis;
   if (!FindMatchingChassis(old_timestamp_sec, &chassis)) return false;
@@ -1040,24 +1039,6 @@ bool LMDLocalization::PredictByChassis(const Pose &old_pose,
     new_pose->mutable_position()->set_y(old_pose.position().y() +
                                         enu_y_velocity * delta_ts);
   }
-
-  // IMU
-  CorrectedImu imu_msg;
-  if (!FindMatchingIMU(new_timestamp_sec, &imu_msg)) return false;
-  CHECK(imu_msg.has_imu());
-  const auto &imu = imu_msg.imu();
-  FillPoseFromImu(imu, new_pose);
-  ADEBUG << "old_pose acc :Ax[" << std::setprecision(6)
-         << old_pose.linear_acceleration().x() << std::fixed << "],Ay[ "
-         << std::setprecision(6) << old_pose.linear_acceleration().y()
-         << std::fixed << "], Az[" << std::setprecision(6)
-         << old_pose.linear_acceleration().z() << std::fixed << "]";
-
-  ADEBUG << "new_pose acc :Ax[" << std::setprecision(6)
-         << new_pose->linear_acceleration().x() << std::fixed << "],Ay[ "
-         << std::setprecision(6) << new_pose->linear_acceleration().y()
-         << std::fixed << "], Az[" << std::setprecision(6)
-         << new_pose->linear_acceleration().z() << std::fixed << "]";
 
   return true;
 }
