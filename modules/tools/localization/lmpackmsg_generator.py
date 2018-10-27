@@ -2,6 +2,7 @@
 from math import cos
 from math import sin
 import rosbag
+import sys
 from modules.localization.proto import odometry_lane_marker_pb2
 
 
@@ -192,10 +193,16 @@ def write_info(source_tuple, filename):
 
 
 def main():
-    resource = read_bag(
-        '/apollo/data/bag/1025/expressway_data.bag')
-    write_info(
-        resource, "/apollo/modules/localization/testdata/OdometryLaneMarkers.bin")
+    """main entry of lmpackmsg_generator
+    Args:
+        argv[1]:raw rosbag input to generate lanemarker msgs
+        argv[2]:filename of generated lane marker msgs
+    """
+    if(len(sys.argv) != 3):
+        print("Please provide --argv[1]:raw rosbag input to generate lanemarker msgs --argv[2]:filename of generated lane marker msgs")
+        sys.exit()
+    resource = read_bag(sys.argv[1])
+    write_info(resource, sys.argv[2])
 
 
 if __name__ == '__main__':
