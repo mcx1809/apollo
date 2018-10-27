@@ -541,7 +541,7 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
                                   double new_timestamp_sec, Pose *new_pose) {
   if (FLAGS_enable_lmd_imu_filter)
     return PredictByKalman(old_pose, old_timestamp_sec, new_timestamp_sec,
-                            new_pose);
+                           new_pose);
   else
     return PredictByLinearIntergrate2(old_pose, old_timestamp_sec,
                                       new_timestamp_sec, new_pose);

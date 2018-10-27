@@ -36,12 +36,12 @@ namespace {
 constexpr double kHeadingOptRange = M_PI * 0.75;
 constexpr double kXOptRange = 3.0;
 constexpr double kYOptRange = 3.0;
-constexpr int kHeadingOptRatio = 6;
+constexpr int kHeadingOptRatio = 8;
 constexpr int kXOptRatio = 6;
 constexpr int kYOptRatio = 6;
 constexpr int kOptIterNum = 4;
-constexpr double kNotFoundError = 20.0;
-constexpr double kMovingXCostRatio = 0.25;
+constexpr double kNotFoundError = 30.0;
+constexpr double kMovingXCostRatio = 0.75;
 constexpr double kMovingYCostRatio = 1.0 - kMovingXCostRatio;
 }  // namespace
 
