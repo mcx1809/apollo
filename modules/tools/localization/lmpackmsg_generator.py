@@ -107,6 +107,7 @@ def cal_proportion(source_tuple, obs_index):
             return (1, odo_index)
         else:
             continue
+    return(1, odo_index)
 
 
 def write_info(source_tuple, filename):
@@ -192,7 +193,7 @@ def write_info(source_tuple, filename):
 
 def main():
     resource = read_bag(
-        '/apollo/data/bag/2018-09-20-11-14-59/2018-09-20-11-15-00_0.bag')
+        '/apollo/data/bag/1025/expressway_data.bag')
     write_info(
         resource, "/apollo/modules/localization/testdata/OdometryLaneMarkers.bin")
 
