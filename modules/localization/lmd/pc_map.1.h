@@ -22,7 +22,7 @@
 #ifndef MODULES_LOCALIZATION_LMD_PC_MAP_H_
 #define MODULES_LOCALIZATION_LMD_PC_MAP_H_
 
-#include <map>
+#include <tuple>
 #include <vector>
 
 #include "modules/common/math/math_utils.h"
@@ -44,8 +44,9 @@ namespace localization {
  * @brief  Point stored in map.
  */
 struct PCMapPoint {
-  PCMapPoint* prev = nullptr;
-  PCMapPoint* next = nullptr;
+  std::size_t prev = (std::size_t)-1;
+  std::size_t next = (std::size_t)-1;
+
   apollo::common::PointENU position;
   apollo::common::Point3D direction;
   double curvature;
@@ -64,35 +65,27 @@ struct PCMapPoint {
  */
 class PCMap {
   struct Node {
-    std::size_t prev;
     std::size_t next;
 
-    std::size_t parent_index;
-    std::size_t lt_index;
-    std::size_t lb_index;
-    std::size_t rt_index;
-    std::size_t rb_index;
+    std::size_t parent_index = (std::size_t)-1;
+    std::size_t lt_index = (std::size_t)-1;
+    std::size_t lb_index = (std::size_t)-1;
+    std::size_t rt_index = (std::size_t)-1;
+    std::size_t rb_index = (std::size_t)-1;
 
-    std::size_t point_index;
-    int level;
-  };
+    char level;
+    unsigned pos : 2;
+    unsigned lt_is_point : 1;
+    unsigned lb_is_point : 1;
+    unsigned rt_is_point : 1;
+    unsigned rb_is_point : 1;
 
-  struct Index2D {
-    int64_t x;
-    int64_t y;
-
-    bool operator<(const Index2D& other) const {
-      if (x < other.x)
-        return true;
-      else if (x == other.x)
-        return y < other.y;
-      else
-        return false;
+    Node() {
+      lt_is_point = 0;
+      lb_is_point = 0;
+      rt_is_point = 0;
+      rb_is_point = 0;
     }
-  };
-
-  struct Node {
-    std::map<Index2D, PCMapPoint> points;
   };
 
  public:
@@ -149,14 +142,6 @@ class PCMap {
 
  private:
   /**
-   *@brief Maker node index data struct according to given params
-   *@param x The x value to make node index
-   *@param y The y value to make node index
-   *@return The generated Index2D data struct by given params
-   */
-  Index2D MakeNodeIndex(const double x, const double y) const;
-
-  /**
    * @brief  Generate odometry lane marker according to the source perception
    * lane_marker and given params
    * @param lanemarker The source perception lanemarker.
@@ -210,8 +195,20 @@ class PCMap {
   double CalCurvity(const double x_value, const double c0, const double c1,
                     const double c2, const double c3) const;
 
+  std::size_t InsertPoint(std::size_t point_index);
+  std::size_t InsertPointInNode(std::size_t node_index, );
+
+  std::size_t FetchPoint();
+  void StorePoint(std::size_t index);
+  std::size_t FetchNode();
+  void StoreNode(std::size_t index);
+
  private:
   LMProvider* provider_;
+  std::vector<PCMapPoint> points_;
+  std::size_t free_point_head_ = (std::size_t)-1;
+  std::vector<Node> nodes_;
+  std::size_t free_node_head_ = (std::size_t)-1;
 };
 
 }  // namespace localization

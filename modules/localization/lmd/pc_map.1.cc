@@ -34,14 +34,20 @@ using apollo::perception::LaneMarker;
 using apollo::perception::LaneMarkers;
 
 namespace {
-constexpr double kNodeSize = 1.0;
-constexpr double kMapResolution = 0.05;
+constexpr double kMapResolution = 0.01;
+constexpr char kMapSizeMaxLevel = 32;
 }  // namespace
 
 PCMap::PCMap(LMProvider* provider) {
   CHECK_NOTNULL(provider);
-  provider_ = provider;
 
+  // initialize root node
+  nodes_.resize(1);
+  auto& root = nodes_[0];
+  root.level = kMapSizeMaxLevel;
+
+  // load all of data from provider
+  provider_ = provider;
   auto pack_size = provider_->GetLaneMarkerPackSize();
   for (decltype(pack_size) pack_index = 0; pack_index < pack_size;
        ++pack_index) {
@@ -213,11 +219,63 @@ double PCMap::CalCurvity(const double x_value, const double c0, const double c1,
          pow(1 + pow(derivative, 2.0), (3.0 / 2));
 }
 
-PCMap::Index2D PCMap::MakeNodeIndex(double x, double y) const {
-  Index2D index;
-  index.x = x / kNodeSize;
-  index.y = y / kNodeSize;
-  return index;
+std::size_t PCMap::InsertPoint(std::size_t point_index) {
+  const auto& point = points_[point_index];
+  auto px = (long long)(point.position.x() / kMapResolution);
+  auto py = (long long)(point.position.y() / kMapResolution);
+
+  long long cur_cent_x = 0;
+  long long cur_cent_y = 0;
+  long long cur_half_size = 1LL << (kMapSizeMaxLevel - 1);
+
+  if (px < cur_cent_x - cur_half_size || px > cur_cent_x + cur_half_size ||
+      py < cur_cent_y - cur_half_size || py > cur_cent_y + cur_half_size)
+    return (std::size_t)-1;
+
+  auto insert_point = [&](std::size_t node_index) {
+
+  };
+
+  insert_point
+}
+
+std::size_t PCMap::FetchPoint() {
+  if (free_point_head_ != (std::size_t)-1) {
+    auto index = free_point_head_;
+    auto& point = points_[index];
+    free_point_head_ = point.next;
+    point.next = (std::size_t)-1;
+    return index;
+  } else {
+    points_.resize(points_.size() + 1);
+    return points_.size() - 1;
+  }
+}
+
+void PCMap::StorePoint(std::size_t index) {
+  auto& point = points_[index];
+  point.prev = (std::size_t)-1;
+  point.next = free_point_head_;
+  free_point_head_ = index;
+}
+
+std::size_t PCMap::FetchNode() {
+  if (free_node_head_ != (std::size_t)-1) {
+    auto index = free_node_head_;
+    auto& node = nodes_[index];
+    free_node_head_ = node.next;
+    node.next = (std::size_t)-1;
+    return index;
+  } else {
+    nodes_.resize(nodes_.size() + 1);
+    return nodes_.size() - 1;
+  }
+}
+
+void PCMap::StoreNode(std::size_t index) {
+  auto& node = nodes_[index];
+  node.next = free_node_head_;
+  free_node_head_ = index;
 }
 
 }  // namespace localization
