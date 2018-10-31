@@ -67,24 +67,45 @@ class PCMap {
   struct Node {
     std::size_t next;
 
-    std::size_t parent_index = (std::size_t)-1;
-    std::size_t lt_index = (std::size_t)-1;
-    std::size_t lb_index = (std::size_t)-1;
-    std::size_t rt_index = (std::size_t)-1;
-    std::size_t rb_index = (std::size_t)-1;
+    std::size_t p_index = (std::size_t)-1;
+    std::size_t c_index[4];
 
+    long long cx;
+    long long cy;
     char level;
-    unsigned pos : 2;
     unsigned lt_is_point : 1;
-    unsigned lb_is_point : 1;
     unsigned rt_is_point : 1;
+    unsigned lb_is_point : 1;
     unsigned rb_is_point : 1;
 
     Node() {
-      lt_is_point = 0;
-      lb_is_point = 0;
-      rt_is_point = 0;
-      rb_is_point = 0;
+      for (auto& index : c_index) index = (std::size_t)-1;
+    }
+
+    void SetCXY(long long p_cx, long long p_cy, int pos) {
+
+    }
+
+    bool IsPoint(int pos) const {
+      if (pos == 0)
+        return lt_is_point;
+      else if (pos == 1)
+        return rt_is_point;
+      else if (pos == 2)
+        return lb_is_point;
+      else if (pos == 3)
+        return rb_is_point;
+    }
+
+    void SetIsPoint(int pos, bool is) {
+      if (pos == 0)
+        lt_is_point = is ? 1 : 0;
+      else if (pos == 1)
+        rt_is_point = is ? 1 : 0;
+      else if (pos == 2)
+        lb_is_point = is ? 1 : 0;
+      else if (pos == 3)
+        rb_is_point = is ? 1 : 0;
     }
   };
 
@@ -196,7 +217,8 @@ class PCMap {
                     const double c2, const double c3) const;
 
   std::size_t InsertPoint(std::size_t point_index);
-  std::size_t InsertPointInNode(std::size_t node_index, );
+  std::size_t InsertPointInNode(std::size_t node_index, std::size_t point_index,
+                                long long px, long long py);
 
   std::size_t FetchPoint();
   void StorePoint(std::size_t index);

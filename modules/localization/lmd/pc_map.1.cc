@@ -45,6 +45,8 @@ PCMap::PCMap(LMProvider* provider) {
   nodes_.resize(1);
   auto& root = nodes_[0];
   root.level = kMapSizeMaxLevel;
+  root.cx = 0;
+  root.cy = 0;
 
   // load all of data from provider
   provider_ = provider;
@@ -224,19 +226,58 @@ std::size_t PCMap::InsertPoint(std::size_t point_index) {
   auto px = (long long)(point.position.x() / kMapResolution);
   auto py = (long long)(point.position.y() / kMapResolution);
 
-  long long cur_cent_x = 0;
-  long long cur_cent_y = 0;
-  long long cur_half_size = 1LL << (kMapSizeMaxLevel - 1);
-
-  if (px < cur_cent_x - cur_half_size || px > cur_cent_x + cur_half_size ||
-      py < cur_cent_y - cur_half_size || py > cur_cent_y + cur_half_size)
+  long long half_size = 1LL << nodes_[0].level;
+  if (px < -half_size || px > half_size || py < half_size || py > half_size)
     return (std::size_t)-1;
 
-  auto insert_point = [&](std::size_t node_index) {
+  InsertPointInNode(0, point_index, px, py);
+}
 
-  };
+std::size_t PCMap::InsertPointInNode(std::size_t node_index,
+                                     std::size_t point_index, long long px,
+                                     long long py) {
+  auto& node = nodes_[node_index];
+  auto pos = (px < node.cx ? 0 : 1) + (py < node.cy ? 0 : 2);
+  auto& c_index = node.c_index[pos];
+  if (c_index == (std::size_t)-1) {
+    c_index = point_index;
+    node.SetIsPoint(pos, true);
+    return node_index;
+  }
 
-  insert_point
+  if (node.IsPoint(pos)) {
+    const auto& cur_point = points_[c_index];
+    auto cur_px = (long long)(cur_point.position.x() / kMapResolution);
+    auto cur_py = (long long)(cur_point.position.y() / kMapResolution);
+
+    if (!node.level) {
+      auto& new_point = points_[point_index];
+      new_point.prev = old_point.prev;
+      new_point.next = old_point.next;
+      if (new_point.prev != (std::size_t)-1) {
+        auto& prev_point = points_[new_point.prev];
+        prev_point.next = point_index;
+      }
+      if (new_point.next != (std::size_t)-1) {
+        auto& next_point = points_[new_point.next];
+        next_point.prev = point_index;
+      }
+      return node_index;
+    }
+
+  } else {
+    auto& c_node = nodes_[c_index];
+    auto c_half_size = 1LL << c_node.level;
+
+    if (px >= c_node.cx - c_half_size && px <= c_node.cx + c_half_size &&
+        py >= c_node.cy - c_half_size && py <= c_node.cy + c_half_size)
+      return InsertPointInNode(c_index, point_index, px, py);
+
+    auto m_index = FetchNode();
+    auto& m_node = nodes_[m_index];
+    m_node.level = node.level - 1;
+    
+  }
 }
 
 std::size_t PCMap::FetchPoint() {
