@@ -38,6 +38,10 @@ constexpr double kMapResolution = 0.01;
 constexpr char kMapSizeMaxLevel = 32;
 }  // namespace
 
+static long long GetMapX(double x) { return (long long)(x / kMapResolution); }
+
+static long long GetMapY(double y) { return (long long)(y / kMapResolution); }
+
 PCMap::PCMap(LMProvider* provider) {
   CHECK_NOTNULL(provider);
 
@@ -96,48 +100,34 @@ const PCMapPoint* PCMap::GetNearestPoint(const PointENU& position) const {
 }
 
 void PCMap::LoadLaneMarker(const OdometryLaneMarker& lane_marker) {
-  PCMapPoint* seg_point = nullptr;
-
+  auto seg_point_index = (std::size_t)-1;
+  std::size_t last_node_index = 0;
   for (const auto& lane_point : lane_marker.points()) {
-    auto node_index =
-        MakeNodeIndex(lane_point.position().x(), lane_point.position().y());
+    auto point_index = FetchPoint();
+    auto& point = points_[point_index];
+    point.Set(lane_point);
 
-    auto set_point = [&](std::map<Index2D, PCMapPoint>* points) {
-      Index2D index;
-      index.x = lane_point.position().x() / kMapResolution;
-      index.y = lane_point.position().y() / kMapResolution;
+    last_node_index = InsertPoint(last_node_index, point_index);
+    if (last_node_index == (std::size_t)-1) {
+      StorePoint(point_index);
+      seg_point_index = (std::size_t)-1;
+      last_node_index = 0;
+      continue;
+    }
 
-      auto point_it = points->find(index);
-      if (point_it == points->end()) {
-        auto& point =
-            points->emplace(index, PCMapPoint(lane_point)).first->second;
-        if (seg_point != nullptr) {
-          seg_point->next = &point;
-          point.prev = seg_point;
-        }
-        seg_point = &point;
-      } else {
-        auto& point = point_it->second;
-        if (seg_point == nullptr) {
-          if (point.next == nullptr) seg_point = &point;
-        } else {
-          if (point.prev == nullptr) {
-            seg_point->next = &point;
-            point.prev = seg_point;
-          }
-          if (point.next == nullptr)
-            seg_point = &point;
-          else
-            seg_point = nullptr;
-        }
+    if (seg_point_index == (std::size_t)-1) {
+      if (point.next == (std::size_t)-1) seg_point_index = point_index;
+    } else {
+      if (point.prev == (std::size_t)-1) {
+        point.prev = seg_point_index;
+        auto& seg_point = points_[seg_point_index];
+        seg_point.next = point_index;
       }
-    };
-
-    auto node_it = nodes_.find(node_index);
-    if (node_it == nodes_.end())
-      set_point(&nodes_[node_index].points);
-    else
-      set_point(&node_it->second.points);
+      if (point.next == (std::size_t)-1)
+        seg_point_index = point_index;
+      else
+        seg_point_index = (std::size_t)-1;
+    }
   }
 }
 
@@ -221,62 +211,182 @@ double PCMap::CalCurvity(const double x_value, const double c0, const double c1,
          pow(1 + pow(derivative, 2.0), (3.0 / 2));
 }
 
-std::size_t PCMap::InsertPoint(std::size_t point_index) {
+std::size_t InsertPoint(std::size_t node_index, std::size_t point_index) {
   const auto& point = points_[point_index];
-  auto px = (long long)(point.position.x() / kMapResolution);
-  auto py = (long long)(point.position.y() / kMapResolution);
+  auto px = GetMapX(point.position.x());
+  auto py = GetMapY(point.position.y());
+  return InsertPoint(node_index, point_index, px, py);
+}
 
-  long long half_size = 1LL << nodes_[0].level;
-  if (px < -half_size || px > half_size || py < half_size || py > half_size)
-    return (std::size_t)-1;
-
-  InsertPointInNode(0, point_index, px, py);
+std::size_t PCMap::InsertPoint(std::size_t node_index, std::size_t point_index,
+                               long long px, long long py) {
+  const auto& node = nodes_[node_index];
+  if (node.OnBoundary(px, py)) {
+    InsertPointInNode(node_index, point_index, px, py);
+  } else {
+    if (node.p_index != (std::size_t)-1)
+      return InsertPoint(node.p_index, point_index, px, py);
+    else
+      return (std::size_t)-1;
+  }
 }
 
 std::size_t PCMap::InsertPointInNode(std::size_t node_index,
                                      std::size_t point_index, long long px,
                                      long long py) {
   auto& node = nodes_[node_index];
-  auto pos = (px < node.cx ? 0 : 1) + (py < node.cy ? 0 : 2);
-  auto& c_index = node.c_index[pos];
+  auto c_pos = node.GetPos(px, py);
+  auto c_index = node.c_index[c_pos];
   if (c_index == (std::size_t)-1) {
-    c_index = point_index;
-    node.SetIsPoint(pos, true);
+    node.SetPoint(c_pos, point_index);
     return node_index;
   }
 
-  if (node.IsPoint(pos)) {
-    const auto& cur_point = points_[c_index];
-    auto cur_px = (long long)(cur_point.position.x() / kMapResolution);
-    auto cur_py = (long long)(cur_point.position.y() / kMapResolution);
+  if (node.IsPoint(c_pos)) {
+    auto cur_point_index = c_index;
+    const auto& cur_point = points_[cur_point_index];
+    auto cur_px = GetMapX(cur_point.position.x());
+    auto cur_py = GetMapY(cur_point.position.y());
 
-    if (!node.level) {
-      auto& new_point = points_[point_index];
-      new_point.prev = old_point.prev;
-      new_point.next = old_point.next;
-      if (new_point.prev != (std::size_t)-1) {
-        auto& prev_point = points_[new_point.prev];
-        prev_point.next = point_index;
+    auto m_index = FetchNode();
+    auto& m_node = nodes_[m_index];
+    auto m_pos = c_pos;
+    m_node.SetParentNode(node_index);
+    node.SetChildNode(m_pos, m_index);
+    m_node.cx = node.cx;
+    m_node.cy = node.cy;
+    m_node.level = node.level;
+    while (m_node.level) {
+      m_node.level--;
+      m_node.SetCXY(m_node.cx, m_node.cy, m_pos);
+      auto p_pos = m_node.GetPos(px, py);
+      auto cp_pos = m_node.GetPos(cur_px, cur_py);
+      if (cp_pos != p_pos) {
+        m_node.SetPoint(p_pos, point_index);
+        m_node.SetPoint(cp_pos, cur_point_index);
+        return m_index;
       }
-      if (new_point.next != (std::size_t)-1) {
-        auto& next_point = points_[new_point.next];
-        next_point.prev = point_index;
-      }
-      return node_index;
     }
 
+    auto& point = points_[point_index];
+    point.prev = cur_point.prev;
+    point.next = cur_point.next;
+    if (point.prev != (std::size_t)-1) {
+      auto& prev_point = points_[point.prev];
+      prev_point.next = point_index;
+    }
+    if (point.next != (std::size_t)-1) {
+      auto& next_point = points_[point.next];
+      next_point.prev = point_index;
+    }
+    StorePoint(cur_point_index);
+    return m_index;
   } else {
     auto& c_node = nodes_[c_index];
-    auto c_half_size = 1LL << c_node.level;
-
-    if (px >= c_node.cx - c_half_size && px <= c_node.cx + c_half_size &&
-        py >= c_node.cy - c_half_size && py <= c_node.cy + c_half_size)
+    if (c_node.OnBoundary(px, py))
       return InsertPointInNode(c_index, point_index, px, py);
 
     auto m_index = FetchNode();
     auto& m_node = nodes_[m_index];
-    m_node.level = node.level - 1;
-    
+    auto m_pos = c_pos;
+    m_node.SetParentNode(node_index);
+    node.SetChildNode(m_pos, m_index);
+    m_node.cx = node.cx;
+    m_node.cy = node.cy;
+    m_node.level = node.level;
+    while (true) {
+      m_node.level--;
+      m_node.SetCXY(m_node.cx, m_node.cy, m_pos);
+      auto c_pos = m_node.GetPos(c_node.cx, c_node.cy);
+      auto p_pos = m_node.GetPos(px, py);
+      if (c_pos != p_pos) {
+        c_node.SetParentNode(m_index);
+        m_node.SetChildNode(c_pos, c_index);
+        m_node.SetPoint(p_pos, point_index);
+        return m_index;
+      }
+    }
+  }
+}
+
+std::tuple<std::size_t, std::size_t, double> PCMap::FindNearestPointInNode(
+    std::size_t node_index, long long px, long long py, double x, double y) {
+  const auto& node = nodes_[node_index];
+  auto c_pos = node.GetPos(px, py);
+  auto c_index = node.c_index[c_pos];
+
+  auto nearest_node_index = (std::size_t)-1;
+  auto nearest_point_index = (std::size_t)-1;
+  auto nearest_distance2 = std::numeric_limits<double>::max();
+
+  if (c_index == (std::size_t)-1) {
+    if (node.IsPoint(c_pos)) {
+      nearest_node_index = node_index;
+      nearest_point_index = c_index;
+      const auto& point = points_[c_index];
+      nearest_distance2 = Vec2d(point.x, point.y).DistanceSquareTo(Vec2d(x, y));
+    } else {
+      std::tie(nearest_node_index, nearest_point_index, nearest_distance2) =
+          FindNearestPointInNode(c_index, px, py, x, y);
+    }
+  }
+
+  for (auto i = 0; i < 4; i++) {
+    auto c_index = node.c_index[i];
+    if (i != c_pos && c_index != (std::size_t)-1) {
+      if (node.IsPoint(c_pos)) {
+        const auto& point = points_[c_index];
+        auto distance2 = Vec2d(point.x, point.y).DistanceSquareTo(Vec2d(x, y));
+        if (distance2 < nearest_distance2) {
+          nearest_node_index = node_index;
+          nearest_point_index = c_index;
+          nearest_distance2 = distance2;
+        }
+      } else {
+        std::size_t r_node_index;
+        std::size_t r_point_index;
+        double r_distance2;
+        std::tie(r_node_index, r_point_index, r_distance2) =
+            FindNearestPointOutNode(node_index, px, py, x, y,
+                                    nearest_distance2);
+
+        if (r_distance2 < nearest_distance2) {
+          nearest_node_index = r_node_index;
+          nearest_point_index = r_point_index;
+          nearest_distance2 = r_distance;
+        }
+      }
+    }
+  }
+
+  return std::make_tuple(nearest_node_index, nearest_point_index,
+                         nearest_distance2);
+}
+
+std::tuple<std::size_t, std::size_t, double> PCMap::FindNearestPointOutNode(
+    std::size_t node_index, long long px, long long py, double x, double y,
+    double range) {
+  const auto& node = nodes_[node_index];
+  auto half_size = HalfSize();
+  auto bl = node.cx - half_size;
+  auto br = node.cx + half_size;
+  auto bt = node.cy + half_size;
+  auto bb = node.cy - half_size;
+
+  if (px < bl) {
+    if (py < bb) {
+    } else if (py >= bb && py < bt) {
+    } else {
+    }
+  } else if (px >= bl && px < br) {
+    if (py < bb) {
+    } else {
+    }
+  } else {
+    if (py < bb) {
+    } else if (py >= bb && py < bt) {
+    } else {
+    }
   }
 }
 

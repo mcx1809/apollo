@@ -51,7 +51,11 @@ struct PCMapPoint {
   apollo::common::Point3D direction;
   double curvature;
 
-  explicit PCMapPoint(const OdometryLaneMarkerPoint& point) {
+  PCMapPoint() = default;
+
+  PCMapPoint(const OdometryLaneMarkerPoint& point) { Set(point); }
+
+  void Set(const OdometryLaneMarkerPoint& point) {
     position = point.position();
     direction = point.direct();
     curvature = point.curvature();
@@ -82,8 +86,33 @@ class PCMap {
       for (auto& index : c_index) index = (std::size_t)-1;
     }
 
-    void SetCXY(long long p_cx, long long p_cy, int pos) {
+    long long HalfSize() const { return 1LL << c_node.level; }
 
+    bool OnBoundary(long long x, long long y) const {
+      auto half_size = HalfSize();
+      return x >= cx - half_size && x < cx + half_size && y >= cy - half_size &&
+             y < cy + half_size;
+    }
+
+    int GetPos(long long x, long long y) const {
+      return (x < node.cx ? 0 : 1) + (y < node.cy ? 0 : 2);
+    }
+
+    void SetCXY(long long p_cx, long long p_cy, int pos) {
+      auto half_size = HalfSize();
+      if (pos == 0) {
+        cx = p_cx - half_size;
+        cy = p_cy + half_size;
+      } else if (pos == 1) {
+        cx = p_cx + half_size;
+        cy = p_cy + half_size;
+      } else if (pos == 2) {
+        cx = p_cx - half_size;
+        cy = p_cy - half_size;
+      } else if (pos == 3) {
+        cx = p_cx + half_size;
+        cy = p_cy - half_size;
+      }
     }
 
     bool IsPoint(int pos) const {
@@ -97,16 +126,31 @@ class PCMap {
         return rb_is_point;
     }
 
-    void SetIsPoint(int pos, bool is) {
+    void SetPoint(int pos, std::size_t point_index) {
+      c_index[pos] = point_index;
       if (pos == 0)
-        lt_is_point = is ? 1 : 0;
+        lt_is_point = 1;
       else if (pos == 1)
-        rt_is_point = is ? 1 : 0;
+        rt_is_point = 1;
       else if (pos == 2)
-        lb_is_point = is ? 1 : 0;
+        lb_is_point = 1;
       else if (pos == 3)
-        rb_is_point = is ? 1 : 0;
+        rb_is_point = 1;
     }
+
+    void SetChildNode(int pos, std::size_t node_index) {
+      c_index[pos] = node_index;
+      if (pos == 0)
+        lt_is_point = 0;
+      else if (pos == 1)
+        rt_is_point = 0;
+      else if (pos == 2)
+        lb_is_point = 0;
+      else if (pos == 3)
+        rb_is_point = 0;
+    }
+
+    void SetParentNode(std::size_t node_index) { p_index = node_index; }
   };
 
  public:
@@ -216,9 +260,17 @@ class PCMap {
   double CalCurvity(const double x_value, const double c0, const double c1,
                     const double c2, const double c3) const;
 
-  std::size_t InsertPoint(std::size_t point_index);
+  std::size_t InsertPoint(std::size_t node_index, std::size_t point_index);
+  std::size_t InsertPoint(std::size_t node_index, std::size_t point_index,
+                          long long px, long long py);
   std::size_t InsertPointInNode(std::size_t node_index, std::size_t point_index,
                                 long long px, long long py);
+
+  std::tuple<std::size_t, std::size_t, double> FindNearestPointInNode(
+      std::size_t node_index, long long px, long long py, double x, double y);
+  std::tuple<std::size_t, std::size_t, double> FindNearestPointOutNode(
+      std::size_t node_index, long long px, long long py, double x, double y,
+      double range);
 
   std::size_t FetchPoint();
   void StorePoint(std::size_t index);
