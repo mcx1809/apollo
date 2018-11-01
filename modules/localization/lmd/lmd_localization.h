@@ -40,6 +40,7 @@
 #include "modules/common/status/status.h"
 #include "modules/localization/lmd/lm_provider.h"
 #include "modules/localization/lmd/lm_sampler.h"
+#include "modules/localization/lmd/lmd_particle_filter.h"
 #include "modules/localization/lmd/pc_map.h"
 #include "modules/localization/lmd/pc_registrator.h"
 #include "modules/localization/localization_base.h"
@@ -98,6 +99,9 @@ class LMDLocalization : public LocalizationBase {
   bool PredictByChassis(const Pose &old_pose, double old_timestamp_sec,
                         double new_timestamp_sec, Pose *new_pose);
 
+  bool PredictByParticleFilter(const Pose &old_pose, double old_timestamp_sec,
+                               double new_timestamp_sec, Pose *new_pose);
+
   void InitKFENUPredictor(const Pose &pose);
   void UpdateKFENUPredictor(const Pose &pose, double delta_ts);
 
@@ -112,10 +116,10 @@ class LMDLocalization : public LocalizationBase {
   LMSampler lm_sampler_;
   PCMap pc_map_;
   PCRegistrator pc_registrator_;
+  ParticleFilter pc_filter_;
   bool has_last_pose_ = false;
   Pose last_pose_;
   double last_pose_timestamp_sec_;
-
   common::math::KalmanFilter<double, 3, 3, 6> kf_enu_predictor_;
 };
 

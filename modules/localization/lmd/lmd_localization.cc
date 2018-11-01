@@ -545,6 +545,8 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
   else
     return PredictByLinearIntergrate2(old_pose, old_timestamp_sec,
                                       new_timestamp_sec, new_pose);
+  // return PredictByParticleFilter(old_pose, old_timestamp_sec,
+  //                               new_timestamp_sec, new_pose);
 }
 
 bool LMDLocalization::FindMatchingGPS(double timestamp_sec, Gps *gps_msg) {
@@ -840,6 +842,87 @@ bool LMDLocalization::PredictByLinearIntergrate(const Pose &old_pose,
   return true;
 }
 
+bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
+                                              double old_timestamp_sec,
+                                              double new_timestamp_sec,
+                                              Pose *new_pose) {
+  Map map;
+  if (!pc_filter_.read_map_data("testdata/map_data.txt", map)) {
+    ADEBUG << "Error: Could not open map file";
+    return -1;
+  }
+  double sensor_range = 50;
+  double sigma_pos[3] = {0.3, 0.3, 0.01};
+  double sigma_landmark[2] = {0.3, 0.3};
+  std::default_random_engine gen;
+  std::normal_distribution<double> N_x_init(0, sigma_pos[0]);
+  std::normal_distribution<double> N_y_init(0, sigma_pos[1]);
+  std::normal_distribution<double> N_theta_init(0, sigma_pos[2]);
+  std::normal_distribution<double> N_obs_x(0, sigma_landmark[0]);
+  std::normal_distribution<double> N_obs_y(0, sigma_landmark[1]);
+  auto delta_time = new_timestamp_sec - old_timestamp_sec;
+  if (!pc_filter_.initialized()) {
+    double n_x, n_y, n_theta;
+    auto x = old_pose.position().x();
+    auto y = old_pose.position().y();
+    auto theta = old_pose.heading();
+    n_x = N_x_init(gen);
+    n_y = N_y_init(gen);
+    n_theta = N_theta_init(gen);
+    pc_filter_.init(x + n_x, y + n_y, theta + n_theta, sigma_pos);
+  } else {
+    CorrectedImu imu_msg;
+    FindMatchingIMU(old_timestamp_sec, &imu_msg);
+    CHECK(imu_msg.has_imu());
+    const auto &imu = imu_msg.imu();
+    auto velocity_x = imu.linear_velocity().x();
+    auto velocity_y = imu.linear_velocity().y();
+    auto velocity_z = imu.linear_velocity().z();
+    auto yawrate_x = imu.angular_velocity().x();
+    auto yawrate_y = imu.angular_velocity().y();
+    auto yawrate_z = imu.angular_velocity().z();
+    auto velocity = sqrt(pow(velocity_x, 2.0) + pow(velocity_y, 2.0) +
+                         pow(velocity_z, 2.0));
+    auto yawrate =
+        sqrt(pow(yawrate_x, 2.0) + pow(yawrate_y, 2.0) + pow(yawrate_z, 2.0));
+    pc_filter_.prediction(delta_time, sigma_pos, velocity, yawrate);
+  }
+  std::vector<LandmarkObs> noisy_observations;
+  LandmarkObs obs;
+  double n_x, n_y;
+  for (int j = 0; j < 10; ++j) {
+    n_x = N_obs_x(gen);
+    n_y = N_obs_y(gen);
+    obs.x = 0.1 * j + n_x;
+    obs.y = obs.x + n_y;
+    noisy_observations.push_back(obs);
+  }
+  pc_filter_.updateWeights(sensor_range, sigma_landmark, noisy_observations,
+                           map);
+  pc_filter_.resample();
+  std::vector<Particle> particles = pc_filter_.particles;
+  int num_particles = particles.size();
+  double highest_weight = -1.0;
+  Particle best_particle;
+  for (auto i = 0; i < num_particles; ++i) {
+    if (particles[i].weight > highest_weight) {
+      highest_weight = particles[i].weight;
+      best_particle = particles[i];
+    }
+  }
+  PointENU position_1;
+  position_1.set_x(best_particle.x);
+  position_1.set_y(best_particle.y);
+  position_1.set_z(old_pose.position().z());
+  new_pose->mutable_position()->CopyFrom(position_1);
+  new_pose->set_heading(best_particle.theta);
+  CorrectedImu imu_msg_1;
+  FindMatchingIMU(new_timestamp_sec, &imu_msg_1);
+  CHECK(imu_msg_1.has_imu());
+  FillPoseFromImu(imu_msg_1.imu(), new_pose);
+  return true;
+}
+
 bool LMDLocalization::PredictByLinearIntergrate2(const Pose &old_pose,
                                                  double old_timestamp_sec,
                                                  double new_timestamp_sec,
@@ -1010,7 +1093,6 @@ bool LMDLocalization::PredictByLinearIntergrate2(const Pose &old_pose,
       imu.CopyFrom(imu_1);
     }
   }
-
   return true;
 }
 

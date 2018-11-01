@@ -7,6 +7,7 @@ cc_library(
     srcs = [
         "lm_provider.cc",
         "lm_sampler.cc",
+        "lmd_particle_filter.cc",
         "lmd_localization.cc",
         "pc_map.cc",
         "pc_registrator.cc",
@@ -14,6 +15,7 @@ cc_library(
     hdrs = [
         "lm_provider.h",
         "lm_sampler.h",
+        "lmd_particle_filter.h",
         "lmd_localization.h",
         "pc_map.h",
         "pc_registrator.h",
