@@ -22,7 +22,7 @@
 #ifndef MODULES_LOCALIZATION_LMD_PC_MAP_H_
 #define MODULES_LOCALIZATION_LMD_PC_MAP_H_
 
-#include <map>
+#include <tuple>
 #include <vector>
 
 #include "modules/common/math/math_utils.h"
@@ -39,18 +39,25 @@
 namespace apollo {
 namespace localization {
 
+typedef std::size_t PCMapIndex;
+
 /**
  * @struct PCMapPoint
  * @brief  Point stored in map.
  */
 struct PCMapPoint {
-  PCMapPoint* prev = nullptr;
-  PCMapPoint* next = nullptr;
+  PCMapIndex prev = (PCMapIndex)-1;
+  PCMapIndex next = (PCMapIndex)-1;
+
   apollo::common::PointENU position;
   apollo::common::Point3D direction;
   double curvature;
 
-  explicit PCMapPoint(const OdometryLaneMarkerPoint& point) {
+  PCMapPoint() = default;
+
+  PCMapPoint(const OdometryLaneMarkerPoint& point) { Set(point); }
+
+  void Set(const OdometryLaneMarkerPoint& point) {
     position = point.position();
     direction = point.direct();
     curvature = point.curvature();
@@ -63,22 +70,89 @@ struct PCMapPoint {
  * @brief  Map of point cloud.
  */
 class PCMap {
-  struct Index2D {
-    int64_t x;
-    int64_t y;
-
-    bool operator<(const Index2D& other) const {
-      if (x < other.x)
-        return true;
-      else if (x == other.x)
-        return y < other.y;
-      else
-        return false;
-    }
-  };
-
   struct Node {
-    std::map<Index2D, PCMapPoint> points;
+    PCMapIndex next;
+
+    PCMapIndex p_index = (PCMapIndex)-1;
+    PCMapIndex c_index[4];
+
+    long long cx;
+    long long cy;
+    char level;
+    unsigned lt_is_point : 1;
+    unsigned rt_is_point : 1;
+    unsigned lb_is_point : 1;
+    unsigned rb_is_point : 1;
+
+    Node() {
+      for (auto& index : c_index) index = (PCMapIndex)-1;
+    }
+
+    long long HalfSize() const { return 1LL << level; }
+
+    bool OnBoundary(long long x, long long y) const {
+      auto half_size = HalfSize();
+      return x >= cx - half_size && x < cx + half_size && y >= cy - half_size &&
+             y < cy + half_size;
+    }
+
+    int GetPos(long long x, long long y) const {
+      return (x < cx ? 0 : 1) + (y < cy ? 0 : 2);
+    }
+
+    void SetCXY(long long p_cx, long long p_cy, int pos) {
+      auto half_size = HalfSize();
+      if (pos == 0) {
+        cx = p_cx - half_size;
+        cy = p_cy + half_size;
+      } else if (pos == 1) {
+        cx = p_cx + half_size;
+        cy = p_cy + half_size;
+      } else if (pos == 2) {
+        cx = p_cx - half_size;
+        cy = p_cy - half_size;
+      } else {
+        cx = p_cx + half_size;
+        cy = p_cy - half_size;
+      }
+    }
+
+    bool IsPoint(int pos) const {
+      if (pos == 0)
+        return lt_is_point;
+      else if (pos == 1)
+        return rt_is_point;
+      else if (pos == 2)
+        return lb_is_point;
+      else
+        return rb_is_point;
+    }
+
+    void SetPoint(int pos, PCMapIndex point_index) {
+      c_index[pos] = point_index;
+      if (pos == 0)
+        lt_is_point = 1;
+      else if (pos == 1)
+        rt_is_point = 1;
+      else if (pos == 2)
+        lb_is_point = 1;
+      else
+        rb_is_point = 1;
+    }
+
+    void SetChildNode(int pos, PCMapIndex node_index) {
+      c_index[pos] = node_index;
+      if (pos == 0)
+        lt_is_point = 0;
+      else if (pos == 1)
+        rt_is_point = 0;
+      else if (pos == 2)
+        lb_is_point = 0;
+      else
+        rb_is_point = 0;
+    }
+
+    void SetParentNode(PCMapIndex node_index) { p_index = node_index; }
   };
 
  public:
@@ -98,19 +172,26 @@ class PCMap {
    * position.
    * @param position The given position.
    * @param d2 Distance squqre.
-   * @return The nearest point in lane_marker or nullptr.
+   * @return The index of nearest point.
    */
-  const PCMapPoint* GetNearestPoint(const apollo::common::PointENU& position,
-                                    double* d2) const;
+  const PCMapIndex GetNearestPoint(const apollo::common::PointENU& position,
+                                   double* d2) const;
 
   /**
    * @brief  Find the nearest point in lane_marker according to the given
    * position.
    * @param position The given position.
-   * @return The nearest point in lane_marker or nullptr.
+   * @return The index of nearest point.
    */
-  const PCMapPoint* GetNearestPoint(
+  const PCMapIndex GetNearestPoint(
       const apollo::common::PointENU& position) const;
+
+  /**
+   * @brief  Get point from index.
+   * @param index The index of point.
+   * @return The point's ptr or nullptr.
+   */
+  const PCMapPoint* Point(PCMapIndex index) const;
 
   /**
    * @brief insert the points in the given OdometryLaneMarker to nodes.
@@ -134,14 +215,6 @@ class PCMap {
       const double lane_length, const int point_number);
 
  private:
-  /**
-   *@brief Maker node index data struct according to given params
-   *@param x The x value to make node index
-   *@param y The y value to make node index
-   *@return The generated Index2D data struct by given params
-   */
-  Index2D MakeNodeIndex(const double x, const double y) const;
-
   /**
    * @brief  Generate odometry lane marker according to the source perception
    * lane_marker and given params
@@ -196,9 +269,30 @@ class PCMap {
   double CalCurvity(const double x_value, const double c0, const double c1,
                     const double c2, const double c3) const;
 
+  PCMapIndex InsertPoint(PCMapIndex node_index, PCMapIndex point_index);
+  PCMapIndex InsertPoint(PCMapIndex node_index, PCMapIndex point_index,
+                         long long px, long long py);
+  PCMapIndex InsertPointInNode(PCMapIndex node_index, PCMapIndex point_index,
+                               long long px, long long py);
+
+  std::tuple<PCMapIndex, PCMapIndex, double> FindNearestPointInNode(
+      PCMapIndex node_index, long long px, long long py, double x,
+      double y) const;
+  std::tuple<PCMapIndex, PCMapIndex, double> FindNearestPointOutNode(
+      PCMapIndex node_index, long long px, long long py, double x, double y,
+      double range2) const;
+
+  PCMapIndex FetchPoint();
+  void StorePoint(PCMapIndex index);
+  PCMapIndex FetchNode();
+  void StoreNode(PCMapIndex index);
+
  private:
   LMProvider* provider_;
-  std::map<Index2D, Node> nodes_;
+  std::vector<PCMapPoint> points_;
+  PCMapIndex free_point_head_ = (PCMapIndex)-1;
+  std::vector<Node> nodes_;
+  PCMapIndex free_node_head_ = (PCMapIndex)-1;
 };
 
 }  // namespace localization

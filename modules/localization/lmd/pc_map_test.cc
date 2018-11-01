@@ -40,7 +40,7 @@ TEST(PCMapTest, GetNearestPoint) {
   search_point.set_x(683092.0);
   search_point.set_y(3110712.0);
   search_point.set_z(57.0);
-  auto nearest_point = map.GetNearestPoint(search_point);
+  auto nearest_point = map.Point(map.GetNearestPoint(search_point));
   EXPECT_NE(nullptr, nearest_point);
   if (nearest_point != nullptr) {
     EXPECT_NEAR(683092.31, nearest_point->position.x(), 0.01);

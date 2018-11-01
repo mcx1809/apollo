@@ -40,7 +40,7 @@ constexpr int kHeadingOptRatio = 8;
 constexpr int kXOptRatio = 6;
 constexpr int kYOptRatio = 6;
 constexpr int kOptIterNum = 4;
-constexpr double kNotFoundError = 30.0;
+constexpr double kNotFoundError = 1000.0;
 constexpr double kMovingXCostRatio = 0.75;
 constexpr double kMovingYCostRatio = 1.0 - kMovingXCostRatio;
 }  // namespace
@@ -147,7 +147,8 @@ double PCRegistrator::ComputeError(
     enu_position.set_y(enu_y);
     enu_position.set_z(0.0);
     double nearest_d2;
-    auto nearest_p = map_->GetNearestPoint(enu_position, &nearest_d2);
+    auto nearest_p =
+        map_->Point(map_->GetNearestPoint(enu_position, &nearest_d2));
     if (!nearest_p) {
       ++not_found;
       error += kNotFoundError;
@@ -159,15 +160,15 @@ double PCRegistrator::ComputeError(
     auto pd = Vec2d(enu_x, enu_y);
     auto d2 = nearest_d2;
 
-    if (nearest_p->prev != nullptr) {
-      auto p1 =
-          Vec2d(nearest_p->prev->position.x(), nearest_p->prev->position.y());
+    auto prev_p = map_->Point(nearest_p->prev);
+    if (prev_p != nullptr) {
+      auto p1 = Vec2d(prev_p->position.x(), prev_p->position.y());
       d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
     }
 
-    if (nearest_p->next != nullptr) {
-      auto p1 =
-          Vec2d(nearest_p->next->position.x(), nearest_p->next->position.y());
+    auto next_p = map_->Point(nearest_p->next);
+    if (next_p != nullptr) {
+      auto p1 = Vec2d(next_p->position.x(), next_p->position.y());
       d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
     }
 
