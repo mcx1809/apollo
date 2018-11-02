@@ -25,6 +25,8 @@
 #include <tuple>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "modules/common/math/math_utils.h"
 #include "modules/common/proto/geometry.pb.h"
 #include "modules/common/status/status.h"
@@ -97,7 +99,17 @@ class PCMap {
     }
 
     int GetPos(long long x, long long y) const {
-      return (x < cx ? 0 : 1) + (y < cy ? 0 : 2);
+      if (x < cx) {
+        if (y < cy)
+          return 2;
+        else
+          return 0;
+      } else {
+        if (y < cy)
+          return 3;
+        else
+          return 1;
+      }
     }
 
     void SetCXY(long long p_cx, long long p_cy, int pos) {
@@ -156,7 +168,7 @@ class PCMap {
   };
 
  public:
-  explicit PCMap(LMProvider* provider);
+  explicit PCMap(LMProvider* provider = nullptr);
 
   /**
    * @brief  Update map for range.
@@ -275,12 +287,15 @@ class PCMap {
   PCMapIndex InsertPointInNode(PCMapIndex node_index, PCMapIndex point_index,
                                long long px, long long py);
 
-  std::tuple<PCMapIndex, PCMapIndex, double> FindNearestPointInNode(
+  std::tuple<PCMapIndex, PCMapIndex, double, bool> FindNearestPointInNode(
       PCMapIndex node_index, long long px, long long py, double x,
       double y) const;
   std::tuple<PCMapIndex, PCMapIndex, double> FindNearestPointOutNode(
       PCMapIndex node_index, long long px, long long py, double x, double y,
       double range2) const;
+
+  long long GetMapX(double x) const;
+  long long GetMapY(double y) const;
 
   PCMapIndex FetchPoint();
   void StorePoint(PCMapIndex index);
@@ -293,6 +308,10 @@ class PCMap {
   PCMapIndex free_point_head_ = (PCMapIndex)-1;
   std::vector<Node> nodes_;
   PCMapIndex free_node_head_ = (PCMapIndex)-1;
+
+  FRIEND_TEST(PCMapTest, FetchAndStore);
+  FRIEND_TEST(PCMapTest, InsertPoint);
+  FRIEND_TEST(PCMapTest, FindNearestPointInNode);
 };
 
 }  // namespace localization

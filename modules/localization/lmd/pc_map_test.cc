@@ -21,13 +21,132 @@
 
 namespace apollo {
 namespace localization {
+
 namespace {
 constexpr int kPointsNumInsertToMap = 240;
 constexpr double kInsertMapLaneLength = 12.0;
 }  // namespace
+
 using apollo::common::PointENU;
 
-TEST(PCMapTest, GetNearestPoint) {
+class PCMapTest : public ::testing::Test {};
+
+TEST_F(PCMapTest, FetchAndStore) {
+  PCMap map;
+
+  auto point_index0 = map.FetchPoint();
+  EXPECT_EQ(1, map.points_.size());
+  auto point_index1 = map.FetchPoint();
+  EXPECT_EQ(2, map.points_.size());
+  auto point_index2 = map.FetchPoint();
+  EXPECT_EQ(3, map.points_.size());
+  auto point_index3 = map.FetchPoint();
+  EXPECT_EQ(4, map.points_.size());
+  auto point_index4 = map.FetchPoint();
+  EXPECT_EQ(5, map.points_.size());
+  map.StorePoint(point_index0);
+  point_index0 = map.FetchPoint();
+  EXPECT_EQ(5, map.points_.size());
+  map.StorePoint(point_index1);
+  map.StorePoint(point_index2);
+  map.StorePoint(point_index3);
+  map.StorePoint(point_index4);
+  EXPECT_EQ(point_index4, map.FetchPoint());
+  EXPECT_EQ(point_index3, map.FetchPoint());
+
+  auto node_index0 = map.FetchNode();
+  EXPECT_EQ(2, map.nodes_.size());
+  auto node_index1 = map.FetchNode();
+  EXPECT_EQ(3, map.nodes_.size());
+  auto node_index2 = map.FetchNode();
+  EXPECT_EQ(4, map.nodes_.size());
+  auto node_index3 = map.FetchNode();
+  EXPECT_EQ(5, map.nodes_.size());
+  auto node_index4 = map.FetchNode();
+  EXPECT_EQ(6, map.nodes_.size());
+  map.StoreNode(node_index0);
+  node_index0 = map.FetchNode();
+  EXPECT_EQ(6, map.nodes_.size());
+  map.StoreNode(node_index1);
+  map.StoreNode(node_index2);
+  map.StoreNode(node_index3);
+  map.StoreNode(node_index4);
+  EXPECT_EQ(node_index4, map.FetchNode());
+  EXPECT_EQ(node_index3, map.FetchNode());
+}
+
+TEST_F(PCMapTest, InsertPoint) {
+  PCMap map;
+
+  auto point_index = map.FetchPoint();
+  auto& point = map.points_[point_index];
+  point.position.set_x(100.0);
+  point.position.set_y(100.0);
+  auto node_index = map.InsertPoint(0, point_index);
+  EXPECT_EQ(0, node_index);
+  const auto& node = map.nodes_[node_index];
+  EXPECT_EQ(true, node.IsPoint(1));
+  EXPECT_EQ((PCMapIndex)-1, node.c_index[0]);
+  EXPECT_EQ(point_index, node.c_index[1]);
+  EXPECT_EQ((PCMapIndex)-1, node.c_index[2]);
+  EXPECT_EQ((PCMapIndex)-1, node.c_index[3]);
+
+  auto point_index1 = map.FetchPoint();
+  auto& point1 = map.points_[point_index1];
+  point1.position.set_x(200.0);
+  point1.position.set_y(100.0);
+  auto node_index1 = map.InsertPoint(0, point_index1);
+  EXPECT_EQ(false, node.IsPoint(1));
+  EXPECT_EQ((PCMapIndex)-1, node.c_index[0]);
+  EXPECT_EQ(node_index1, node.c_index[1]);
+  EXPECT_EQ((PCMapIndex)-1, node.c_index[2]);
+  EXPECT_EQ((PCMapIndex)-1, node.c_index[3]);
+  const auto& node1 = map.nodes_[node_index1];
+  EXPECT_EQ(true, node1.IsPoint(2));
+  EXPECT_EQ(true, node1.IsPoint(3));
+  EXPECT_EQ((PCMapIndex)-1, node1.c_index[0]);
+  EXPECT_EQ(point_index, node1.c_index[2]);
+  EXPECT_EQ(point_index1, node1.c_index[3]);
+}
+
+TEST_F(PCMapTest, FindNearestPointInNode) {
+  PCMap map;
+
+  auto src_point_index = map.FetchPoint();
+  auto& src_point = map.points_[src_point_index];
+  src_point.position.set_x(100.0);
+  src_point.position.set_y(100.0);
+  map.InsertPoint(0, src_point_index);
+
+  double x = 0.0;
+  double y = 0.0;
+  PCMapIndex node_index;
+  PCMapIndex point_index;
+  double d2;
+  bool on_boundary;
+  /*std::tie(node_index, point_index, d2, on_boundary) =
+      map.FindNearestPointInNode(0, map.GetMapX(x), map.GetMapY(y), x, y);
+  EXPECT_EQ(src_point_index, point_index);
+  EXPECT_NEAR(20000.0, d2, 1e-3);
+  EXPECT_TRUE(on_boundary);*/
+
+  auto src_point_index1 = map.FetchPoint();
+  auto& src_point1 = map.points_[src_point_index1];
+  src_point1.position.set_x(200.0);
+  src_point1.position.set_y(100.0);
+  map.InsertPoint(0, src_point_index1);
+
+  x = 190.0;
+  y = 100.0;
+  std::tie(node_index, point_index, d2, on_boundary) =
+      map.FindNearestPointInNode(0, map.GetMapX(x), map.GetMapY(y), x, y);
+  EXPECT_TRUE(false);
+  /*EXPECT_EQ(src_point_index1, point_index);
+ EXPECT_NEAR(100.0, d2, 1e-3);
+ EXPECT_TRUE(on_boundary);*/
+}
+
+/*TEST(PCMapTest, GetNearestPoint) {
   LMProvider provider;
   PCMap map(&provider);
   PointENU position;
@@ -78,6 +197,7 @@ TEST(PCMapTest, PrepareLaneMarkers) {
     EXPECT_EQ(kPointsNumInsertToMap, lane.points_size());
     map.LoadLaneMarker(lane);
   }
-}
+}*/
+
 }  // namespace localization
 }  // namespace apollo
