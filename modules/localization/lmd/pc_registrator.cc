@@ -147,28 +147,28 @@ double PCRegistrator::ComputeError(
     enu_position.set_y(enu_y);
     enu_position.set_z(0.0);
     double nearest_d2;
-    auto nearest_p =
-        map_->Point(map_->GetNearestPoint(enu_position, &nearest_d2));
-    if (!nearest_p) {
+    auto nearest_pi = map_->GetNearestPoint(enu_position, &nearest_d2);
+    if (!nearest_pi != (PCMapIndex)-1) {
       ++not_found;
       error += kNotFoundError;
       continue;
     }
+    auto nearest_p = map_->PointCopy(nearest_pi);
 
     // get distance
-    auto p0 = Vec2d(nearest_p->position.x(), nearest_p->position.y());
+    auto p0 = Vec2d(nearest_p.position.x(), nearest_p.position.y());
     auto pd = Vec2d(enu_x, enu_y);
     auto d2 = nearest_d2;
 
-    auto prev_p = map_->Point(nearest_p->prev);
-    if (prev_p != nullptr) {
-      auto p1 = Vec2d(prev_p->position.x(), prev_p->position.y());
+    if (nearest_p.prev != (PCMapIndex)-1) {
+      auto prev_p = map_->PointCopy(nearest_p.prev);
+      auto p1 = Vec2d(prev_p.position.x(), prev_p.position.y());
       d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
     }
 
-    auto next_p = map_->Point(nearest_p->next);
-    if (next_p != nullptr) {
-      auto p1 = Vec2d(next_p->position.x(), next_p->position.y());
+    if (nearest_p.next != (PCMapIndex)-1) {
+      auto next_p = map_->PointCopy(nearest_p.next);
+      auto p1 = Vec2d(next_p.position.x(), next_p.position.y());
       d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
     }
 

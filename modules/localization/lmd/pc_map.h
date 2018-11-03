@@ -199,11 +199,11 @@ class PCMap {
       const apollo::common::PointENU& position) const;
 
   /**
-   * @brief  Get point from index.
+   * @brief  Get copy of point from index.
    * @param index The index of point.
-   * @return The point's ptr or nullptr.
+   * @return The point.
    */
-  const PCMapPoint* Point(PCMapIndex index) const;
+  PCMapPoint PointCopy(PCMapIndex index) const;
 
   /**
    * @brief insert the points in the given OdometryLaneMarker to nodes.
@@ -301,6 +301,10 @@ class PCMap {
   void StorePoint(PCMapIndex index);
   PCMapIndex FetchNode();
   void StoreNode(PCMapIndex index);
+  const PCMapPoint& PointRef(PCMapIndex index) const;
+  PCMapPoint& PointRef(PCMapIndex index);
+  const Node& NodeRef(PCMapIndex index) const;
+  Node& NodeRef(PCMapIndex index);
 
  private:
   LMProvider* provider_;

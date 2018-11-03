@@ -79,43 +79,38 @@ TEST_F(PCMapTest, InsertPoint) {
   PCMap map;
 
   auto point_index = map.FetchPoint();
-  auto& point = map.points_[point_index];
-  point.position.set_x(100.0);
-  point.position.set_y(100.0);
+  map.PointRef(point_index).position.set_x(100.0);
+  map.PointRef(point_index).position.set_y(100.0);
   auto node_index = map.InsertPoint(0, point_index);
   EXPECT_EQ(0, node_index);
-  const auto& node = map.nodes_[node_index];
-  EXPECT_EQ(true, node.IsPoint(1));
-  EXPECT_EQ((PCMapIndex)-1, node.c_index[0]);
-  EXPECT_EQ(point_index, node.c_index[1]);
-  EXPECT_EQ((PCMapIndex)-1, node.c_index[2]);
-  EXPECT_EQ((PCMapIndex)-1, node.c_index[3]);
+  EXPECT_EQ(true, map.NodeRef(node_index).IsPoint(1));
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index).c_index[0]);
+  EXPECT_EQ(point_index, map.NodeRef(node_index).c_index[1]);
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index).c_index[2]);
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index).c_index[3]);
 
   auto point_index1 = map.FetchPoint();
-  auto& point1 = map.points_[point_index1];
-  point1.position.set_x(200.0);
-  point1.position.set_y(100.0);
+  map.PointRef(point_index1).position.set_x(200.0);
+  map.PointRef(point_index1).position.set_y(100.0);
   auto node_index1 = map.InsertPoint(0, point_index1);
-  EXPECT_EQ(false, node.IsPoint(1));
-  EXPECT_EQ((PCMapIndex)-1, node.c_index[0]);
-  EXPECT_EQ(node_index1, node.c_index[1]);
-  EXPECT_EQ((PCMapIndex)-1, node.c_index[2]);
-  EXPECT_EQ((PCMapIndex)-1, node.c_index[3]);
-  const auto& node1 = map.nodes_[node_index1];
-  EXPECT_EQ(true, node1.IsPoint(2));
-  EXPECT_EQ(true, node1.IsPoint(3));
-  EXPECT_EQ((PCMapIndex)-1, node1.c_index[0]);
-  EXPECT_EQ(point_index, node1.c_index[2]);
-  EXPECT_EQ(point_index1, node1.c_index[3]);
+  EXPECT_EQ(false, map.NodeRef(node_index).IsPoint(1));
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index).c_index[0]);
+  EXPECT_EQ(node_index1, map.NodeRef(node_index).c_index[1]);
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index).c_index[2]);
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index).c_index[3]);
+  EXPECT_EQ(true, map.NodeRef(node_index1).IsPoint(2));
+  EXPECT_EQ(true, map.NodeRef(node_index1).IsPoint(3));
+  EXPECT_EQ((PCMapIndex)-1, map.NodeRef(node_index1).c_index[0]);
+  EXPECT_EQ(point_index, map.NodeRef(node_index1).c_index[2]);
+  EXPECT_EQ(point_index1, map.NodeRef(node_index1).c_index[3]);
 }
 
 TEST_F(PCMapTest, FindNearestPointInNode) {
   PCMap map;
 
   auto src_point_index = map.FetchPoint();
-  auto& src_point = map.points_[src_point_index];
-  src_point.position.set_x(100.0);
-  src_point.position.set_y(100.0);
+  map.PointRef(src_point_index).position.set_x(100.0);
+  map.PointRef(src_point_index).position.set_y(100.0);
   map.InsertPoint(0, src_point_index);
 
   double x = 0.0;
@@ -124,53 +119,58 @@ TEST_F(PCMapTest, FindNearestPointInNode) {
   PCMapIndex point_index;
   double d2;
   bool on_boundary;
-  /*std::tie(node_index, point_index, d2, on_boundary) =
+  std::tie(node_index, point_index, d2, on_boundary) =
       map.FindNearestPointInNode(0, map.GetMapX(x), map.GetMapY(y), x, y);
   EXPECT_EQ(src_point_index, point_index);
   EXPECT_NEAR(20000.0, d2, 1e-3);
-  EXPECT_TRUE(on_boundary);*/
+  EXPECT_TRUE(on_boundary);
 
   auto src_point_index1 = map.FetchPoint();
-  auto& src_point1 = map.points_[src_point_index1];
-  src_point1.position.set_x(200.0);
-  src_point1.position.set_y(100.0);
+  map.PointRef(src_point_index1).position.set_x(200.0);
+  map.PointRef(src_point_index1).position.set_y(100.0);
   map.InsertPoint(0, src_point_index1);
 
   x = 190.0;
   y = 100.0;
   std::tie(node_index, point_index, d2, on_boundary) =
       map.FindNearestPointInNode(0, map.GetMapX(x), map.GetMapY(y), x, y);
-  EXPECT_TRUE(false);
-  /*EXPECT_EQ(src_point_index1, point_index);
- EXPECT_NEAR(100.0, d2, 1e-3);
- EXPECT_TRUE(on_boundary);*/
+  EXPECT_EQ(src_point_index1, point_index);
+  EXPECT_NEAR(100.0, d2, 1e-3);
+  EXPECT_TRUE(on_boundary);
 }
 
-/*TEST(PCMapTest, GetNearestPoint) {
-  LMProvider provider;
-  PCMap map(&provider);
-  PointENU position;
-  position.set_x(683092.0);
-  position.set_y(3110712.0);
-  position.set_z(57.0);
-  map.UpdateRange(position, 16.0);
+TEST_F(PCMapTest, LoadLaneMarker) {
+  PCMap map;
 
-  PointENU search_point;
-  search_point.set_x(683092.0);
-  search_point.set_y(3110712.0);
-  search_point.set_z(57.0);
-  auto nearest_point = map.Point(map.GetNearestPoint(search_point));
-  EXPECT_NE(nullptr, nearest_point);
-  if (nearest_point != nullptr) {
-    EXPECT_NEAR(683092.31, nearest_point->position.x(), 0.01);
-    EXPECT_NEAR(3110712.43, nearest_point->position.y(), 0.01);
-    EXPECT_NEAR(57.08, nearest_point->position.z(), 0.01);
+  OdometryLaneMarker lane_marker;
+  for (auto i = 1; i < 1000; ++i) {
+    auto* point = lane_marker.add_points();
+    point->mutable_position()->set_x((double)i);
+    point->mutable_position()->set_y(-10.0);
   }
+
+  map.LoadLaneMarker(lane_marker);
+
+  for (auto i = 0; i < lane_marker.points_size(); ++i) {
+    auto& point = lane_marker.points(i);
+    double d2;
+    auto nearest_index = map.GetNearestPoint(point.position(), &d2);
+    EXPECT_NE((PCMapIndex)-1, nearest_index);
+    EXPECT_NEAR(0.0, d2, 1e-3);
+  }
+
+  PointENU position;
+  position.set_x(10.0);
+  position.set_y(10.0);
+  double d2;
+  auto nearest_index = map.GetNearestPoint(position, &d2);
+  //EXPECT_NE((PCMapIndex)-1, nearest_index);
+  //EXPECT_NEAR(20.0, d2, 1e-3);
 }
 
-TEST(PCMapTest, PrepareLaneMarkers) {
-  LMProvider provider;
-  PCMap map(&provider);
+/*TEST_F(PCMapTest, PrepareLaneMarkers) {
+  PCMap map;
+
   PointENU position;
   position.set_x(681732.77703);
   position.set_y(3112136.72507);
@@ -193,7 +193,7 @@ TEST(PCMapTest, PrepareLaneMarkers) {
       map.PrepareLaneMarkers(lane_markers, position, heading,
                              kInsertMapLaneLength, kPointsNumInsertToMap);
   EXPECT_EQ(2, source_lanes.size());
-  for (auto lane : source_lanes) {
+  for (auto& lane : source_lanes) {
     EXPECT_EQ(kPointsNumInsertToMap, lane.points_size());
     map.LoadLaneMarker(lane);
   }
