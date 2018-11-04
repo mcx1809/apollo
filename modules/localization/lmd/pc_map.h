@@ -195,6 +195,7 @@ class PCMap {
    * @param position The given position.
    * @return The index of nearest point.
    */
+  // TODO(all):
   const PCMapIndex GetNearestPoint(
       const apollo::common::PointENU& position) const;
 

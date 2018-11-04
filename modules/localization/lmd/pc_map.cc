@@ -73,7 +73,7 @@ const PCMapIndex PCMap::GetNearestPoint(const PointENU& position,
   auto px = GetMapX(x);
   auto py = GetMapX(y);
   auto root_index = 0;
-  if (!nodes_[root_index].OnBoundary(px, py)) return (PCMapIndex)-1;
+  if (!NodeRef(root_index).OnBoundary(px, py)) return (PCMapIndex)-1;
 
   PCMapIndex point_index;
   double distance2;
@@ -336,8 +336,7 @@ std::tuple<PCMapIndex, PCMapIndex, double, bool> PCMap::FindNearestPointInNode(
           PCMapIndex r_point_index;
           double distance2;
           std::tie(r_node_index, r_point_index, distance2) =
-              FindNearestPointOutNode(node_index, px, py, x, y,
-                                      nearest_distance2);
+              FindNearestPointOutNode(c_index, px, py, x, y, nearest_distance2);
 
           if (distance2 < nearest_distance2) {
             nearest_node_index = r_node_index;
@@ -429,8 +428,7 @@ std::tuple<PCMapIndex, PCMapIndex, double> PCMap::FindNearestPointOutNode(
         PCMapIndex r_point_index;
         double distance2;
         std::tie(r_node_index, r_point_index, distance2) =
-            FindNearestPointOutNode(node_index, px, py, x, y,
-                                    nearest_distance2);
+            FindNearestPointOutNode(c_index, px, py, x, y, nearest_distance2);
 
         if (distance2 < nearest_distance2) {
           nearest_node_index = r_node_index;

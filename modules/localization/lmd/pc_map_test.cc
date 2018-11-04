@@ -164,11 +164,11 @@ TEST_F(PCMapTest, LoadLaneMarker) {
   position.set_y(10.0);
   double d2;
   auto nearest_index = map.GetNearestPoint(position, &d2);
-  //EXPECT_NE((PCMapIndex)-1, nearest_index);
-  //EXPECT_NEAR(20.0, d2, 1e-3);
+  EXPECT_NE((PCMapIndex)-1, nearest_index);
+  EXPECT_NEAR(400.0, d2, 1e-3);
 }
 
-/*TEST_F(PCMapTest, PrepareLaneMarkers) {
+TEST_F(PCMapTest, PrepareLaneMarkers) {
   PCMap map;
 
   PointENU position;
@@ -197,7 +197,7 @@ TEST_F(PCMapTest, LoadLaneMarker) {
     EXPECT_EQ(kPointsNumInsertToMap, lane.points_size());
     map.LoadLaneMarker(lane);
   }
-}*/
+}
 
 }  // namespace localization
 }  // namespace apollo
