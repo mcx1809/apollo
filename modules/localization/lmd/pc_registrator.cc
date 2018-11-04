@@ -148,7 +148,7 @@ double PCRegistrator::ComputeError(
     enu_position.set_z(0.0);
     double nearest_d2;
     auto nearest_pi = map_->GetNearestPoint(enu_position, &nearest_d2);
-    if (!nearest_pi != (PCMapIndex)-1) {
+    if (nearest_pi == (PCMapIndex)-1) {
       ++not_found;
       error += kNotFoundError;
       continue;

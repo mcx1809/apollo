@@ -19,7 +19,7 @@
 namespace apollo {
 namespace localization {
 
-/*TEST(LMProviderTest, GetLaneMarkerPackSize) {
+TEST(LMProviderTest, GetLaneMarkerPackSize) {
   LMProvider* lm_provider_ = new LMProvider();
   EXPECT_EQ(2, lm_provider_->GetLaneMarkerPackSize());
   delete lm_provider_;
@@ -156,7 +156,7 @@ TEST(LMProviderTest, GetLaneMarker) {
   EXPECT_NEAR(3111284.2039481895, lane_marker->points(0).position().y(), 0.01);
   EXPECT_NEAR(66.241558944806457, lane_marker->points(0).position().z(), 0.01);
   delete lm_provider_;
-}*/
+}
 
 }  // namespace localization
 }  // namespace apollo

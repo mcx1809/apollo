@@ -43,7 +43,7 @@ class PCRegistratorTest : public ::testing::Test {
   PCRegistrator registrator_;
 };
 
-/*TEST_F(PCRegistratorTest, ComputeError) {
+TEST_F(PCRegistratorTest, ComputeError) {
   LaneMarkers lane_markers;
   lane_markers.mutable_left_lane_marker()->set_c0_position(1.3);
   lane_markers.mutable_left_lane_marker()->set_c1_heading_angle(0.0);
@@ -70,7 +70,7 @@ class PCRegistratorTest : public ::testing::Test {
   map_.UpdateRange(position, 16.0);
   auto error1 = registrator_.ComputeError(source_points, position, heading);
 
-  EXPECT_LT(error0, error1);
+  EXPECT_GT(error0, error1);
 }
 
 TEST_F(PCRegistratorTest, Register) {
@@ -90,7 +90,7 @@ TEST_F(PCRegistratorTest, Register) {
   position.set_y(3110730.5);
   position.set_z(57.0);
   map_.UpdateRange(position, 16.0);
-  double heading = 3.0;
+  double heading = 2.0;
 
   PointENU position_processed;
   double heading_processed;
@@ -98,7 +98,7 @@ TEST_F(PCRegistratorTest, Register) {
                         &heading_processed);
 
   EXPECT_NEAR(2.5, heading_processed, 0.1);
-}*/
+}
 
 }  // namespace localization
 }  // namespace apollo
