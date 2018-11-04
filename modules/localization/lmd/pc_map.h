@@ -57,7 +57,7 @@ struct PCMapPoint {
 
   PCMapPoint() = default;
 
-  PCMapPoint(const OdometryLaneMarkerPoint& point) { Set(point); }
+  explicit PCMapPoint(const OdometryLaneMarkerPoint& point) { Set(point); }
 
   void Set(const OdometryLaneMarkerPoint& point) {
     position = point.position();
@@ -78,8 +78,8 @@ class PCMap {
     PCMapIndex p_index = (PCMapIndex)-1;
     PCMapIndex c_index[4];
 
-    long long cx;
-    long long cy;
+    int64_t cx;
+    int64_t cy;
     char level;
     unsigned lt_is_point : 1;
     unsigned rt_is_point : 1;
@@ -90,15 +90,15 @@ class PCMap {
       for (auto& index : c_index) index = (PCMapIndex)-1;
     }
 
-    long long HalfSize() const { return 1LL << level; }
+    int64_t HalfSize() const { return 1LL << level; }
 
-    bool OnBoundary(long long x, long long y) const {
+    bool OnBoundary(int64_t x, int64_t y) const {
       auto half_size = HalfSize();
       return x >= cx - half_size && x < cx + half_size && y >= cy - half_size &&
              y < cy + half_size;
     }
 
-    int GetPos(long long x, long long y) const {
+    int GetPos(int64_t x, int64_t y) const {
       if (x < cx) {
         if (y < cy)
           return 2;
@@ -112,7 +112,7 @@ class PCMap {
       }
     }
 
-    void SetCXY(long long p_cx, long long p_cy, int pos) {
+    void SetCXY(int64_t p_cx, int64_t p_cy, int pos) {
       auto half_size = HalfSize();
       if (pos == 0) {
         cx = p_cx - half_size;
@@ -195,9 +195,20 @@ class PCMap {
    * @param position The given position.
    * @return The index of nearest point.
    */
-  // TODO(all):
   const PCMapIndex GetNearestPoint(
       const apollo::common::PointENU& position) const;
+
+  /**
+   * @brief  Find the nearest point in lane_marker according to the given
+   * position, with faster speed.
+   * @param node_index The index of near node.
+   * @param position The given position.
+   * @param d2 Distance squqre.
+   * @return The index of nearest point.
+   */
+  const PCMapIndex GetNearestPointOpt(PCMapIndex node_index,
+                                      const apollo::common::PointENU& position,
+                                      double* d2) const;
 
   /**
    * @brief  Get copy of point from index.
@@ -284,19 +295,18 @@ class PCMap {
 
   PCMapIndex InsertPoint(PCMapIndex node_index, PCMapIndex point_index);
   PCMapIndex InsertPoint(PCMapIndex node_index, PCMapIndex point_index,
-                         long long px, long long py);
+                         int64_t px, int64_t py);
   PCMapIndex InsertPointInNode(PCMapIndex node_index, PCMapIndex point_index,
-                               long long px, long long py);
+                               int64_t px, int64_t py);
 
   std::tuple<PCMapIndex, PCMapIndex, double, bool> FindNearestPointInNode(
-      PCMapIndex node_index, long long px, long long py, double x,
-      double y) const;
+      PCMapIndex node_index, int64_t px, int64_t py, double x, double y) const;
   std::tuple<PCMapIndex, PCMapIndex, double> FindNearestPointOutNode(
-      PCMapIndex node_index, long long px, long long py, double x, double y,
+      PCMapIndex node_index, int64_t px, int64_t py, double x, double y,
       double range2) const;
 
-  long long GetMapX(double x) const;
-  long long GetMapY(double y) const;
+  int64_t GetMapX(double x) const;
+  int64_t GetMapY(double y) const;
 
   PCMapIndex FetchPoint();
   void StorePoint(PCMapIndex index);

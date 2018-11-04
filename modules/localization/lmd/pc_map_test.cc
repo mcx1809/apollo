@@ -145,7 +145,7 @@ TEST_F(PCMapTest, LoadLaneMarker) {
   OdometryLaneMarker lane_marker;
   for (auto i = 1; i < 1000; ++i) {
     auto* point = lane_marker.add_points();
-    point->mutable_position()->set_x((double)i);
+    point->mutable_position()->set_x(static_cast<double>(i));
     point->mutable_position()->set_y(-10.0);
   }
 

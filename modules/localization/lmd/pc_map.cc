@@ -88,6 +88,17 @@ const PCMapIndex PCMap::GetNearestPoint(const PointENU& position) const {
   return GetNearestPoint(position, nullptr);
 }
 
+const PCMapIndex PCMap::GetNearestPointOpt(
+    PCMapIndex node_index, const apollo::common::PointENU& position,
+    double* d2) const {
+  auto x = position.x();
+  auto y = position.y();
+  auto px = GetMapX(x);
+  auto py = GetMapX(y);
+
+  if (node_index == (PCMapIndex)-1) node_index = 0;
+}
+
 PCMapPoint PCMap::PointCopy(PCMapIndex index) const { return points_[index]; }
 
 void PCMap::LoadLaneMarker(const OdometryLaneMarker& lane_marker) {
@@ -208,7 +219,7 @@ PCMapIndex PCMap::InsertPoint(PCMapIndex node_index, PCMapIndex point_index) {
 }
 
 PCMapIndex PCMap::InsertPoint(PCMapIndex node_index, PCMapIndex point_index,
-                              long long px, long long py) {
+                              int64_t px, int64_t py) {
   if (NodeRef(node_index).OnBoundary(px, py)) {
     return InsertPointInNode(node_index, point_index, px, py);
   } else {
@@ -220,8 +231,8 @@ PCMapIndex PCMap::InsertPoint(PCMapIndex node_index, PCMapIndex point_index,
 }
 
 PCMapIndex PCMap::InsertPointInNode(PCMapIndex node_index,
-                                    PCMapIndex point_index, long long px,
-                                    long long py) {
+                                    PCMapIndex point_index, int64_t px,
+                                    int64_t py) {
   auto c_pos = NodeRef(node_index).GetPos(px, py);
   auto c_index = NodeRef(node_index).c_index[c_pos];
   if (c_index == (PCMapIndex)-1) {
@@ -291,8 +302,7 @@ PCMapIndex PCMap::InsertPointInNode(PCMapIndex node_index,
 }
 
 std::tuple<PCMapIndex, PCMapIndex, double, bool> PCMap::FindNearestPointInNode(
-    PCMapIndex node_index, long long px, long long py, double x,
-    double y) const {
+    PCMapIndex node_index, int64_t px, int64_t py, double x, double y) const {
   auto c_pos = NodeRef(node_index).GetPos(px, py);
   auto c_index = NodeRef(node_index).c_index[c_pos];
 
@@ -361,7 +371,7 @@ std::tuple<PCMapIndex, PCMapIndex, double, bool> PCMap::FindNearestPointInNode(
 }
 
 std::tuple<PCMapIndex, PCMapIndex, double> PCMap::FindNearestPointOutNode(
-    PCMapIndex node_index, long long px, long long py, double x, double y,
+    PCMapIndex node_index, int64_t px, int64_t py, double x, double y,
     double range2) const {
   auto half_size = NodeRef(node_index).HalfSize();
   auto bl = NodeRef(node_index).cx - half_size;
@@ -369,7 +379,7 @@ std::tuple<PCMapIndex, PCMapIndex, double> PCMap::FindNearestPointOutNode(
   auto bt = NodeRef(node_index).cy + half_size;
   auto bb = NodeRef(node_index).cy - half_size;
 
-  auto get_distance2 = [&](long long xi, long long yi) {
+  auto get_distance2 = [&](int64_t xi, int64_t yi) {
     auto xd = xi * kMapResolution;
     auto yd = yi * kMapResolution;
     return Vec2d(xd, yd).DistanceSquareTo(Vec2d(x, y));
@@ -443,13 +453,9 @@ std::tuple<PCMapIndex, PCMapIndex, double> PCMap::FindNearestPointOutNode(
                          nearest_distance2);
 }
 
-long long PCMap::GetMapX(double x) const {
-  return (long long)(x / kMapResolution);
-}
+int64_t PCMap::GetMapX(double x) const { return (int64_t)(x / kMapResolution); }
 
-long long PCMap::GetMapY(double y) const {
-  return (long long)(y / kMapResolution);
-}
+int64_t PCMap::GetMapY(double y) const { return (int64_t)(y / kMapResolution); }
 
 PCMapIndex PCMap::FetchPoint() {
   if (free_point_head_ != (PCMapIndex)-1) {
