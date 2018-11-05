@@ -204,18 +204,18 @@ class PCMap {
    * @param node_index The index of near node.
    * @param position The given position.
    * @param d2 Distance squqre.
-   * @return The index of nearest point.
+   * @return The index of node and index of nearest point.
    */
-  const PCMapIndex GetNearestPointOpt(PCMapIndex node_index,
-                                      const apollo::common::PointENU& position,
-                                      double* d2) const;
+  const std::tuple<PCMapIndex, PCMapIndex> GetNearestPointOpt(
+      PCMapIndex node_index, const apollo::common::PointENU& position,
+      double* d2) const;
 
   /**
-   * @brief  Get copy of point from index.
+   * @brief  Get the point from index.
    * @param index The index of point.
    * @return The point.
    */
-  PCMapPoint PointCopy(PCMapIndex index) const;
+  const PCMapPoint& Point(PCMapIndex index) const;
 
   /**
    * @brief insert the points in the given OdometryLaneMarker to nodes.

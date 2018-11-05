@@ -34,8 +34,8 @@ using apollo::perception::LaneMarker;
 using apollo::perception::LaneMarkers;
 
 namespace {
-constexpr double kMapResolution = 0.01;
-constexpr char kMapSizeMaxLevel = 32;
+constexpr double kMapResolution = 0.02;
+constexpr char kMapSizeMaxLevel = 30;
 }  // namespace
 
 PCMap::PCMap(LMProvider* provider) {
@@ -68,19 +68,8 @@ Status PCMap::UpdateRange(const PointENU& position, double radius) {
 
 const PCMapIndex PCMap::GetNearestPoint(const PointENU& position,
                                         double* d2) const {
-  auto x = position.x();
-  auto y = position.y();
-  auto px = GetMapX(x);
-  auto py = GetMapX(y);
-  auto root_index = 0;
-  if (!NodeRef(root_index).OnBoundary(px, py)) return (PCMapIndex)-1;
-
   PCMapIndex point_index;
-  double distance2;
-  std::tie(std::ignore, point_index, distance2, std::ignore) =
-      FindNearestPointInNode(root_index, px, py, x, y);
-
-  if (d2 != nullptr) *d2 = distance2;
+  std::tie(std::ignore, point_index) = GetNearestPointOpt(0, position, d2);
   return point_index;
 }
 
@@ -88,18 +77,39 @@ const PCMapIndex PCMap::GetNearestPoint(const PointENU& position) const {
   return GetNearestPoint(position, nullptr);
 }
 
-const PCMapIndex PCMap::GetNearestPointOpt(
+const std::tuple<PCMapIndex, PCMapIndex> PCMap::GetNearestPointOpt(
     PCMapIndex node_index, const apollo::common::PointENU& position,
     double* d2) const {
+  CHECK(node_index != (PCMapIndex)-1);
+
   auto x = position.x();
   auto y = position.y();
   auto px = GetMapX(x);
   auto py = GetMapX(y);
+  do {
+    if (!NodeRef(node_index).OnBoundary(px, py))
+      node_index = NodeRef(node_index).p_index;
+    else
+      break;
+  } while (node_index != (PCMapIndex)-1);
 
-  if (node_index == (PCMapIndex)-1) node_index = 0;
+  if (node_index == (PCMapIndex)-1) {
+    if (d2 != nullptr) *d2 = std::numeric_limits<double>::max();
+    return std::make_tuple((PCMapIndex)-1, (PCMapIndex)-1);
+  }
+
+  PCMapIndex point_index;
+  double distance2;
+  std::tie(node_index, point_index, distance2, std::ignore) =
+      FindNearestPointInNode(node_index, px, py, x, y);
+
+  if (d2 != nullptr) *d2 = distance2;
+  return std::make_tuple(node_index, point_index);
 }
 
-PCMapPoint PCMap::PointCopy(PCMapIndex index) const { return points_[index]; }
+const PCMapPoint& PCMap::Point(PCMapIndex index) const {
+  return points_[index];
+}
 
 void PCMap::LoadLaneMarker(const OdometryLaneMarker& lane_marker) {
   auto seg_point_index = (PCMapIndex)-1;

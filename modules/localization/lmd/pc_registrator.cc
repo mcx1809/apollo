@@ -33,16 +33,16 @@ using apollo::common::math::RotateAxis;
 using apollo::common::math::Vec2d;
 
 namespace {
-constexpr double kHeadingOptRange = M_PI * 0.75;
-constexpr double kXOptRange = 3.0;
-constexpr double kYOptRange = 3.0;
-constexpr int kHeadingOptRatio = 8;
-constexpr int kXOptRatio = 6;
-constexpr int kYOptRatio = 6;
+constexpr double kHeadingOptRange = M_PI * 0.6;
+constexpr double kXOptRange = 4.0;
+constexpr double kYOptRange = 4.0;
+constexpr int kHeadingOptRatio = 5;
+constexpr int kXOptRatio = 5;
+constexpr int kYOptRatio = 5;
 constexpr int kOptIterNum = 4;
 constexpr double kNotFoundError = 1000.0;
-constexpr double kMovingXCostRatio = 0.75;
-constexpr double kMovingYCostRatio = 1.0 - kMovingXCostRatio;
+constexpr double kMovingXCostRatio = 2.0;
+constexpr double kMovingYCostRatio = 0.2;
 }  // namespace
 
 PCRegistrator::PCRegistrator(PCMap* map) {
@@ -134,6 +134,7 @@ double PCRegistrator::ComputeError(
   double error = 0.0;
   std::size_t not_found = 0;
 
+  PCMapIndex near_ni = 0;
   for (const auto& p : source_points) {
     // FLU to ENU
     double enu_x, enu_y;
@@ -147,13 +148,16 @@ double PCRegistrator::ComputeError(
     enu_position.set_y(enu_y);
     enu_position.set_z(0.0);
     double nearest_d2;
-    auto nearest_pi = map_->GetNearestPoint(enu_position, &nearest_d2);
+    PCMapIndex nearest_pi;
+    std::tie(near_ni, nearest_pi) =
+        map_->GetNearestPointOpt(near_ni, enu_position, &nearest_d2);
     if (nearest_pi == (PCMapIndex)-1) {
-      ++not_found;
+      near_ni = 0;
+      not_found++;
       error += kNotFoundError;
       continue;
     }
-    auto nearest_p = map_->PointCopy(nearest_pi);
+    const auto& nearest_p = map_->Point(nearest_pi);
 
     // get distance
     auto p0 = Vec2d(nearest_p.position.x(), nearest_p.position.y());
@@ -161,13 +165,13 @@ double PCRegistrator::ComputeError(
     auto d2 = nearest_d2;
 
     if (nearest_p.prev != (PCMapIndex)-1) {
-      auto prev_p = map_->PointCopy(nearest_p.prev);
+      const auto& prev_p = map_->Point(nearest_p.prev);
       auto p1 = Vec2d(prev_p.position.x(), prev_p.position.y());
       d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
     }
 
     if (nearest_p.next != (PCMapIndex)-1) {
-      auto next_p = map_->PointCopy(nearest_p.next);
+      const auto& next_p = map_->Point(nearest_p.next);
       auto p1 = Vec2d(next_p.position.x(), next_p.position.y());
       d2 = std::min(LineSegment2d(p0, p1).DistanceSquareTo(pd), d2);
     }
