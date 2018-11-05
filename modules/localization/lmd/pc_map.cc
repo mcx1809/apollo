@@ -139,10 +139,10 @@ const OdometryLaneMarker PCMap::GenerateOdometryLaneMarker(
   for (int i = 0; i < point_number; ++i) {
     auto point = odo_lane.add_points();
     auto relative_x = lane_length / point_number * i;
-    auto relative_y = CalCurveValue(
+    auto relative_y = GetCurveVal(
         relative_x, lanemarker.c0_position(), lanemarker.c1_heading_angle(),
         lanemarker.c2_curvature(), lanemarker.c3_curvature_derivative());
-    auto curvature_value = CalCurvity(
+    auto curvature_value = GetCurveVal(
         relative_x, lanemarker.c0_position(), lanemarker.c1_heading_angle(),
         lanemarker.c2_curvature(), lanemarker.c3_curvature_derivative());
     point->set_curvature(curvature_value);
@@ -193,21 +193,21 @@ std::vector<OdometryLaneMarker> PCMap::PrepareLaneMarkers(
   return result;
 }
 
-double PCMap::CalCurveValue(const double x_value, const double c0,
+double PCMap::GetCurveVal(const double x_value, const double c0,
                             const double c1, const double c2,
                             const double c3) const {
   return c3 * pow(x_value, 3.0) + c2 * pow(x_value, 2.0) + c1 * x_value + c0;
 }
 
-double PCMap::CalDerivative(const double x_value, const double c0,
+double PCMap::GetDerivative(const double x_value, const double c0,
                             const double c1, const double c2,
                             const double c3) const {
   return 3 * c3 * pow(x_value, 2.0) + 2 * c2 + c1;
 }
 
-double PCMap::CalCurvity(const double x_value, const double c0, const double c1,
+double PCMap::GetCurvity(const double x_value, const double c0, const double c1,
                          const double c2, const double c3) const {
-  double derivative = CalDerivative(x_value, c0, c1, c2, c3);
+  double derivative = GetDerivative(x_value, c0, c1, c2, c3);
   return abs(6 * c3 * x_value + 2 * c2) /
          pow(1 + pow(derivative, 2.0), (3.0 / 2));
 }

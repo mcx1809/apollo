@@ -49,31 +49,79 @@ namespace localization {
 class LMProcessor {
  public:
   explicit LMProcessor(const std::string filename);
-
-  bool IsDoubleEqual(const double first_value, const double second_value) const;
-
-  bool InterpolatePose(const double timestamp_sec,
-                       apollo::common::PointENU* location_ptr,
-                       double* heading) const;
-
+  /**
+   * @brief  prepare desired markers pack in given bag file and store to the
+   * lane_markers_pack
+   * @param  lane_markers_pack_ptr: the ptr to the store OdometryLaneMarkersPack
+   * info
+   */
   void PrepareMarkersPack(apollo::localization::OdometryLaneMarkersPack*
                               lane_markers_pack_ptr) const;
-
-  void SerializeToFile(const apollo::localization::OdometryLaneMarkersPack*
-                           lane_markers_pack_ptr) const;
-
-  double GetCurveVal(const double x_value, const double c0, const double c1,
-                     const double c2, const double c3) const;
-
-  double GetDerivative(const double x_value, const double c0, const double c1,
-                       const double c2, const double c3) const;
-
-  double GetCurvity(const double x_value, const double c0, const double c1,
-                    const double c2, const double c3) const;
 
  private:
   std::vector<apollo::localization::LocalizationEstimate> localization_msgs_;
   std::vector<apollo::perception::PerceptionObstacles> obstacle_msgs_;
+  /**
+   * @brief  Interpolate the location and heading value according to the given
+   * timestamp
+   * @param  timestamp_sec: the given timestamp to search location and heading
+   * value
+   * @param  location_ptr: ptr to the location
+   * @param  heading_ptr: ptr to heading
+   * @return true if succeed
+   */
+  bool InterpolatePose(const double timestamp_sec,
+                       apollo::common::PointENU* location_ptr,
+                       double* heading_ptr) const;
+  /**
+   * @brief  Serialize the given OdometryLaneMarkersPack to desired bin file
+   * @param  lane_markers_pack_ptr: the ptr to the given OdometryLaneMarkersPack
+   */
+  void SerializeToFile(const apollo::localization::OdometryLaneMarkersPack*
+                           lane_markers_pack_ptr) const;
+  /**
+   * @brief  Calculate curve value by given curve params.
+   * @param  x_value: value of x.
+   * @param  c0: position.
+   * @param  c1: heading_angle.
+   * @param  c2: curvature.
+   * @param  c3: curvature_derivative.
+   * @return y = c3 * x**3 + c2 * x**2 + c1 * x + c0.
+   */
+  double GetCurveVal(const double x_value, const double c0, const double c1,
+                     const double c2, const double c3) const;
+  /**
+   * @brief  Calculate the first derivative value according to x_value and curve
+   * analysis formula y = c3 * x**3 + c2 * x**2 + c1 * x + c0
+   * @param  x_value: value of x.
+   * @param  c0: position.
+   * @param  c1: heading_angle.
+   * @param  c2: curvature.
+   * @param  c3: curvature_derivative.
+   * @return the first derivative value when x equal to x_value
+   */
+  double GetDerivative(const double x_value, const double c0, const double c1,
+                       const double c2, const double c3) const;
+  /**
+    * @brief  Calculate the curvity value according to x_value and curve
+    analysis formula y = c3 * x**3 + c2 * x**2 + c1 * x + c0
+    * @param  x_value: value of x.
+    * @param  c0: position.
+    * @param  c1: heading_angle.
+    * @param  c2: curvature.
+    * @param  c3: curvature_derivative.
+    * @return K = |y''| / (1 + y'**2)**(3.0/2)
+              curvity_value K according to the analysis formula with x = x_value
+    */
+  double GetCurvity(const double x_value, const double c0, const double c1,
+                    const double c2, const double c3) const;
+  /**
+   * @brief  Judge two timestamp is equal in a given range.
+   * @param  first_value: first timestamp to compare
+   * @param  second_value: second timestamp to compare.
+   * @return true if the offset in a given value
+   */
+  bool IsDoubleEqual(const double first_value, const double second_value) const;
 };
 }  // namespace localization
 }  // namespace apollo

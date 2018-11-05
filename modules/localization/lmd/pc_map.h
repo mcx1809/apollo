@@ -254,43 +254,44 @@ class PCMap {
       const apollo::common::PointENU position, const double heading,
       const double lane_length, const int point_number) const;
 
+ private:
+  LMProvider* provider_;
+  std::map<Index2D, Node> nodes_;
   /**
    * @brief  Calculate curve value by given curve params.
    * @param  x_value: value of x.
-   *         c0: position.
-   *         c1: heading_angle.
-   *         c2: curvature.
-   *         c3: curvature_derivative.
+   * @param  c0: position.
+   * @param  c1: heading_angle.
+   * @param  c2: curvature.
+   * @param  c3: curvature_derivative.
    * @return y = c3 * x**3 + c2 * x**2 + c1 * x + c0.
    */
-  double CalCurveValue(const double x_value, const double c0, const double c1,
-                       const double c2, const double c3) const;
-
+  double GetCurveVal(const double x_value, const double c0, const double c1,
+                     const double c2, const double c3) const;
   /**
    * @brief  Calculate the first derivative value according to x_value and curve
    * analysis formula y = c3 * x**3 + c2 * x**2 + c1 * x + c0
    * @param  x_value: value of x.
-   *         c0: position.
-   *         c1: heading_angle.
-   *         c2: curvature.
-   *         c3: curvature_derivative.
+   * @param  c0: position.
+   * @param  c1: heading_angle.
+   * @param  c2: curvature.
+   * @param  c3: curvature_derivative.
    * @return the first derivative value when x equal to x_value
    */
-  double CalDerivative(const double x_value, const double c0, const double c1,
+  double GetDerivative(const double x_value, const double c0, const double c1,
                        const double c2, const double c3) const;
-
   /**
     * @brief  Calculate the curvity value according to x_value and curve
     analysis formula y = c3 * x**3 + c2 * x**2 + c1 * x + c0
     * @param  x_value: value of x.
-    *         c0: position.
-    *         c1: heading_angle.
-    *         c2: curvature.
-    *         c3: curvature_derivative.
+    * @param  c0: position.
+    * @param  c1: heading_angle.
+    * @param  c2: curvature.
+    * @param  c3: curvature_derivative.
     * @return K = |y''| / (1 + y'**2)**(3.0/2)
-            curvity_value K according to the analysis formula with x = x_value
+              curvity_value K according to the analysis formula with x = x_value
     */
-  double CalCurvity(const double x_value, const double c0, const double c1,
+  double GetCurvity(const double x_value, const double c0, const double c1,
                     const double c2, const double c3) const;
 
   PCMapIndex InsertPoint(PCMapIndex node_index, PCMapIndex point_index);
