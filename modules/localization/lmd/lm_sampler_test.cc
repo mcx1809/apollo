@@ -15,20 +15,25 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/lm_sampler.h"
+
 #include "gtest/gtest.h"
+
 namespace apollo {
 namespace localization {
+
+using apollo::perception::LaneMarker;
+using apollo::perception::LaneMarkers;
 
 class LMSampleTest : public ::testing::Test {};
 
 TEST(LMSampleTest, SamplingForOneLaneMarker) {
-  apollo::perception::LaneMarker lane_marker;
+  LaneMarker lane_marker;
   lane_marker.set_c0_position(1.0);
   lane_marker.set_c1_heading_angle(1.0);
   lane_marker.set_c2_curvature(1.0);
   lane_marker.set_c3_curvature_derivative(1.0);
 
-  apollo::perception::LaneMarkers lane_markers;
+  LaneMarkers lane_markers;
   lane_markers.mutable_left_lane_marker()->CopyFrom(lane_marker);
 
   LMSampler lm_sampler;

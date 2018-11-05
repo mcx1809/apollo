@@ -15,9 +15,10 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/pc_map.h"
-#include "modules/localization/lmd/lm_provider.h"
 
 #include "gtest/gtest.h"
+
+#include "modules/localization/lmd/lm_provider.h"
 
 namespace apollo {
 namespace localization {

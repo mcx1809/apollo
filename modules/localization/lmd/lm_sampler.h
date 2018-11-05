@@ -44,16 +44,16 @@ class LMSampler {
  public:
   LMSampler();
   virtual ~LMSampler();
+
   /**
    * @brief  Update map for range.
    * @param lane_markers The lane marker from percption.
    * @return The sampling points.
    */
-  std::vector<PCSourcePoint> Sampling(
+  const std::vector<PCSourcePoint>& Sampling(
       const apollo::perception::LaneMarkers& lane_markers);
 
  private:
-  std::vector<PCSourcePoint> pc_sourcepoint_;
   /**
    * @brief  Get curve value by  params.
    * @param  x_value: value of x.
@@ -101,7 +101,8 @@ class LMSampler {
   int SamplingForOneLaneMarker(
       const apollo::perception::LaneMarker& lane_marker);
 
-  // FRIEND_TEST(LMSamplerTest, SamplingForOneLaneMarker);
+ private:
+  std::vector<PCSourcePoint> pc_sourcepoint_;
 };
 
 }  // namespace localization

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *****************************************************************************/
+
 #include "modules/localization/lmd/lmd_localization.h"
 
 #include <algorithm>
@@ -22,6 +23,7 @@
 #include "modules/common/math/euler_angles_zxy.h"
 #include "modules/common/math/math_utils.h"
 #include "modules/common/math/quaternion.h"
+#include "modules/common/time/time.h"
 #include "modules/localization/common/localization_gflags.h"
 
 namespace apollo {
@@ -42,12 +44,14 @@ using apollo::common::math::QuaternionRotate;
 using apollo::common::math::QuaternionToHeading;
 using apollo::common::math::RotateAxis;
 using apollo::common::monitor::MonitorMessageItem;
+using apollo::common::time::Clock;
+using apollo::common::time::ToSecond;
 using apollo::perception::PerceptionObstacles;
 
 namespace {
 constexpr double kPCMapSearchRadius = 10.0;
-constexpr int kPointsNumInsertToMap = 240;
-constexpr double kInsertMapLaneLength = 12.0;
+constexpr int kPointsNumInsertToMap = 480;
+constexpr double kInsertMapLaneLength = 24.0;
 }  // namespace
 
 template <class T>
@@ -312,7 +316,7 @@ static void FillPoseFromImu(const Pose &imu, Pose *pose) {
 LMDLocalization::LMDLocalization()
     : monitor_logger_(MonitorMessageItem::LOCALIZATION),
       map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z},
-      pc_map_(&lm_provider_),
+      pc_map_(FLAGS_enable_lmd_premapping ? &lm_provider_ : nullptr),
       pc_registrator_(&pc_map_) {}
 
 LMDLocalization::~LMDLocalization() {}
@@ -399,8 +403,11 @@ void LMDLocalization::OnPerceptionObstacles(
     // point cloud registration
     PointENU position;
     double heading;
+    auto registration_start_time = Clock::Now();
     pc_registrator_.Register(source_points, position_estimated,
                              heading_estimated, &position, &heading);
+    ADEBUG << "time on registration["
+           << ToSecond(Clock::Now() - registration_start_time) << "]";
 
     // update pc_map_ to contain perception lane_markers
     if (FLAGS_enable_lmd_mapping) {
@@ -545,8 +552,6 @@ bool LMDLocalization::PredictPose(const Pose &old_pose,
   else
     return PredictByLinearIntergrate2(old_pose, old_timestamp_sec,
                                       new_timestamp_sec, new_pose);
-  // return PredictByParticleFilter(old_pose, old_timestamp_sec,
-  //                               new_timestamp_sec, new_pose);
 }
 
 bool LMDLocalization::FindMatchingGPS(double timestamp_sec, Gps *gps_msg) {
@@ -901,10 +906,9 @@ bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
                            map);
   pc_filter_.Resample();
   std::vector<Particle> particles = pc_filter_.particles;
-  int num_particles = particles.size();
   double highest_weight = -1.0;
-  Particle best_particle;
-  for (auto i = 0; i < num_particles; ++i) {
+  auto best_particle = particles[0];
+  for (std::size_t i = 0; i < particles.size(); ++i) {
     if (particles[i].weight > highest_weight) {
       highest_weight = particles[i].weight;
       best_particle = particles[i];

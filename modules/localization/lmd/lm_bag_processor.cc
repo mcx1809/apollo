@@ -13,7 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *****************************************************************************/
+
 #include "modules/localization/lmd/lm_bag_processor.h"
+
+namespace apollo {
+namespace localization {
 
 using apollo::common::Point3D;
 using apollo::common::PointENU;
@@ -21,11 +25,11 @@ using apollo::common::math::RotateAxis;
 using apollo::localization::LocalizationEstimate;
 using apollo::localization::OdometryLaneMarkersPack;
 using apollo::perception::PerceptionObstacles;
-namespace apollo {
-namespace localization {
+
 namespace {
 constexpr float kEpsilon = 0.00001;
-}
+}  // namespace
+
 LMProcessor::LMProcessor(const std::string filename) {
   const std::vector<std::string> topics_{FLAGS_perception_obstacle_topic,
                                          FLAGS_localization_topic};
@@ -201,5 +205,6 @@ void LMProcessor::PrepareMarkersPack(
     }
   }
 }
+
 }  // namespace localization
 }  // namespace apollo

@@ -53,6 +53,7 @@ DECLARE_double(report_gps_imu_time_diff_threshold);
 
 DECLARE_bool(enable_gps_timestamp);
 
+DECLARE_bool(enable_lmd_premapping);
 DECLARE_bool(enable_lmd_mapping);
 DECLARE_bool(enable_lmd_imu_filter);
 DECLARE_bool(enable_lmd_chassis_speed);

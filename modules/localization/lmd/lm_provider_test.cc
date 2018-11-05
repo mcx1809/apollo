@@ -15,7 +15,9 @@
  *****************************************************************************/
 
 #include "modules/localization/lmd/lm_provider.h"
+
 #include "gtest/gtest.h"
+
 namespace apollo {
 namespace localization {
 

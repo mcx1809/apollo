@@ -18,6 +18,7 @@
  * @file lm_bag_processor.h
  * @brief The class of LMBagProcessor.
  */
+
 #ifndef MODULES_LOCALIZATION_LMD_LM_BAG_PROCESSOR_H_
 #define MODULES_LOCALIZATION_LMD_LM_BAG_PROCESSOR_H_
 
@@ -28,24 +29,24 @@
 #include "rosbag/bag.h"
 #include "rosbag/view.h"
 
-#include "modules/common/math/math_utils.h"
 #include "modules/common/proto/geometry.pb.h"
-#include "modules/common/util/file.h"
-#include "modules/localization/common/localization_gflags.h"
 #include "modules/localization/proto/localization.pb.h"
 #include "modules/localization/proto/odometry_lane_marker.pb.h"
 #include "modules/perception/proto/perception_obstacle.pb.h"
 
 #include "modules/common/adapters/adapter_gflags.h"
-
+#include "modules/common/math/math_utils.h"
+#include "modules/common/util/file.h"
+#include "modules/localization/common/localization_gflags.h"
 #include "modules/localization/lmd/lm_sampler.h"
+
 /**
  * @namespace apollo::localization
  * @brief apollo::localization
  */
-
 namespace apollo {
 namespace localization {
+
 class LMProcessor {
  public:
   explicit LMProcessor(const std::string filename);
@@ -59,8 +60,6 @@ class LMProcessor {
                               lane_markers_pack_ptr) const;
 
  private:
-  std::vector<apollo::localization::LocalizationEstimate> localization_msgs_;
-  std::vector<apollo::perception::PerceptionObstacles> obstacle_msgs_;
   /**
    * @brief  Interpolate the location and heading value according to the given
    * timestamp
@@ -122,7 +121,13 @@ class LMProcessor {
    * @return true if the offset in a given value
    */
   bool IsDoubleEqual(const double first_value, const double second_value) const;
+
+ private:
+  std::vector<apollo::localization::LocalizationEstimate> localization_msgs_;
+  std::vector<apollo::perception::PerceptionObstacles> obstacle_msgs_;
 };
+
 }  // namespace localization
 }  // namespace apollo
+
 #endif  // MODULES_LOCALIZATION_LMD_LM_BAG_PROCESSOR_H_

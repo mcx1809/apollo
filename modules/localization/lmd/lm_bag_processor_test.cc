@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *****************************************************************************/
+
 #include "modules/localization/lmd/lm_bag_processor.h"
+
 #include "gtest/gtest.h"
+
 namespace apollo {
 namespace localization {
+
 TEST(LMProcessorTest, SerializeToFile) {
   LMProcessor* processor_ = new LMProcessor(FLAGS_lmd_rawinput_bag_file);
-  apollo::localization::OdometryLaneMarkersPack lane_marker_pack_;
+  OdometryLaneMarkersPack lane_marker_pack_;
   processor_->PrepareMarkersPack(&lane_marker_pack_);
   EXPECT_EQ(2, lane_marker_pack_.lane_markers_size());
 
@@ -62,5 +66,6 @@ TEST(LMProcessorTest, SerializeToFile) {
   EXPECT_NEAR(0.0, direction_next.z(), 0.001);
   EXPECT_NEAR(0.0, point_next.curvature(), 0.001);
 }
+
 }  // namespace localization
 }  // namespace apollo

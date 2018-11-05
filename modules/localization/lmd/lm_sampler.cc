@@ -74,7 +74,7 @@ int LMSampler::SamplingForOneLaneMarker(const LaneMarker& lane_marker) {
   return 0;
 }
 
-std::vector<PCSourcePoint> LMSampler::Sampling(
+const std::vector<PCSourcePoint>& LMSampler::Sampling(
     const LaneMarkers& lane_markers) {
   pc_sourcepoint_.clear();
 
@@ -106,8 +106,7 @@ std::vector<PCSourcePoint> LMSampler::Sampling(
     AERROR << "No any lanemarkers from perception! ";
   }
 
-  std::vector<PCSourcePoint> pc_sourcepoint = pc_sourcepoint_;
-  return pc_sourcepoint;
+  return pc_sourcepoint_;
 }
 
 }  // namespace localization
