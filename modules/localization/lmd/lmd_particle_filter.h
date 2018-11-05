@@ -40,18 +40,18 @@ struct Particle {
   double weight;
 };
 
-struct control_s {
+struct ControlS {
   double velocity;  // Velocity [m/s]
   double yawrate;   // Yaw rate [rad/s]
 };
 
-struct ground_truth {
+struct GroundTruth {
   double x;      // Global vehicle x position
   double y;      // Global vehicle y position
   double theta;  // Global vehicle yaw [rad]
 };
 
-struct LandmarkObs {
+struct LandMarkObs {
   int id;
   double x;
   double y;
@@ -59,12 +59,12 @@ struct LandmarkObs {
 
 class Map {
  public:
-  struct single_landmark_s {
+  struct SingleLandmarks {
     int id_i;
     float x_f;
     float y_f;
   };
-  std::vector<single_landmark_s> landmark_list;
+  std::vector<SingleLandmarks> landmark_list;
 };
 
 class ParticleFilter {
@@ -86,7 +86,7 @@ class ParticleFilter {
    * @param std[] Array of dimension 3 [standard deviation of x [m], standard
    * deviation of y [m] standard deviation of yaw [rad]]
    */
-  void init(double x, double y, double theta, double std[]);
+  void Init(double x, double y, double theta, double std[]);
 
   /**
    * prediction Predicts the state for the next time step
@@ -97,7 +97,7 @@ class ParticleFilter {
    * @param velocity Velocity of car from t to t+1 [m/s]
    * @param yaw_rate Yaw rate of car from t to t+1 [rad/s]
    */
-  void prediction(double delta_t, double std_pos[], double velocity,
+  void Prediction(double delta_t, double std_pos[], double velocity,
                   double yaw_rate);
 
   /**
@@ -106,8 +106,8 @@ class ParticleFilter {
    * @param predicted Vector of predicted landmark observations
    * @param observations Vector of landmark observations
    */
-  void dataAssociation(std::vector<LandmarkObs> predicted,
-                       std::vector<LandmarkObs> observations);
+  void DataAssociation(std::vector<LandMarkObs> predicted,
+                       std::vector<LandMarkObs> observations);
 
   /**
    * updateWeights Updates the weights for each particle based on the likelihood
@@ -118,27 +118,27 @@ class ParticleFilter {
    * @param observations Vector of landmark observations
    * @param map Map class containing map landmarks
    */
-  void updateWeights(double sensor_range, double std_landmark[],
-                     std::vector<LandmarkObs> observations, Map map_landmarks);
+  void UpdateWeights(double sensor_range, double std_landmark[],
+                     std::vector<LandMarkObs> observations, Map map_landmarks);
 
   /**
    * resample Resamples from the updated set of particles to form
    *   the new set of particles.
    */
-  void resample();
+  void Resample();
 
   /**
    * initialized Returns whether particle filter is initialized yet or not.
    */
-  const bool initialized() const;
+  const bool Initialized() const;
   /*
    * Computes the Euclidean distance between two 2D points.
    * @param (x1,y1) x and y coordinates of first point
    * @param (x2,y2) x and y coordinates of second point
    * @output Euclidean distance between two 2D points
    */
-  double dist(double x1, double y1, double x2, double y2);
+  double Dist(double x1, double y1, double x2, double y2);
 
-  bool read_map_data(std::string filename, Map map);
+  bool ReadMapData(std::string filename, Map map);
 };
 #endif /* PARTICLE_FILTER_H_ */

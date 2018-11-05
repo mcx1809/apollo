@@ -847,13 +847,13 @@ bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
                                               double new_timestamp_sec,
                                               Pose *new_pose) {
   Map map;
-  if (!pc_filter_.read_map_data("testdata/map_data.txt", map)) {
+  if (!pc_filter_.ReadMapData("testdata/map_data.txt", map)) {
     ADEBUG << "Error: Could not open map file";
     return -1;
   }
   double sensor_range = 50;
-  double sigma_pos[3] = {0.3, 0.3, 0.01};
-  double sigma_landmark[2] = {0.3, 0.3};
+  double sigma_pos[3] = {0.03, 0.03, 0.01};
+  double sigma_landmark[2] = {0.03, 0.03};
   std::default_random_engine gen;
   std::normal_distribution<double> N_x_init(0, sigma_pos[0]);
   std::normal_distribution<double> N_y_init(0, sigma_pos[1]);
@@ -861,7 +861,7 @@ bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
   std::normal_distribution<double> N_obs_x(0, sigma_landmark[0]);
   std::normal_distribution<double> N_obs_y(0, sigma_landmark[1]);
   auto delta_time = new_timestamp_sec - old_timestamp_sec;
-  if (!pc_filter_.initialized()) {
+  if (!pc_filter_.Initialized()) {
     double n_x, n_y, n_theta;
     auto x = old_pose.position().x();
     auto y = old_pose.position().y();
@@ -869,7 +869,7 @@ bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
     n_x = N_x_init(gen);
     n_y = N_y_init(gen);
     n_theta = N_theta_init(gen);
-    pc_filter_.init(x + n_x, y + n_y, theta + n_theta, sigma_pos);
+    pc_filter_.Init(x + n_x, y + n_y, theta + n_theta, sigma_pos);
   } else {
     CorrectedImu imu_msg;
     FindMatchingIMU(old_timestamp_sec, &imu_msg);
@@ -885,10 +885,10 @@ bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
                          pow(velocity_z, 2.0));
     auto yawrate =
         sqrt(pow(yawrate_x, 2.0) + pow(yawrate_y, 2.0) + pow(yawrate_z, 2.0));
-    pc_filter_.prediction(delta_time, sigma_pos, velocity, yawrate);
+    pc_filter_.Prediction(delta_time, sigma_pos, velocity, yawrate);
   }
-  std::vector<LandmarkObs> noisy_observations;
-  LandmarkObs obs;
+  std::vector<LandMarkObs> noisy_observations;
+  LandMarkObs obs;
   double n_x, n_y;
   for (int j = 0; j < 10; ++j) {
     n_x = N_obs_x(gen);
@@ -897,9 +897,9 @@ bool LMDLocalization::PredictByParticleFilter(const Pose &old_pose,
     obs.y = obs.x + n_y;
     noisy_observations.push_back(obs);
   }
-  pc_filter_.updateWeights(sensor_range, sigma_landmark, noisy_observations,
+  pc_filter_.UpdateWeights(sensor_range, sigma_landmark, noisy_observations,
                            map);
-  pc_filter_.resample();
+  pc_filter_.Resample();
   std::vector<Particle> particles = pc_filter_.particles;
   int num_particles = particles.size();
   double highest_weight = -1.0;

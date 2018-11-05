@@ -22,7 +22,7 @@ ParticleFilter::ParticleFilter() : num_particles_(0), is_initialized_(false) {}
 
 ParticleFilter::~ParticleFilter() {}
 
-void ParticleFilter::init(double x, double y, double theta, double std[]) {
+void ParticleFilter::Init(double x, double y, double theta, double std[]) {
   num_particles_ = 50;
   std::default_random_engine gen;
   std::normal_distribution<double> xNoise(x, std[0]);
@@ -36,7 +36,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
   is_initialized_ = true;
 }
 
-void ParticleFilter::prediction(double delta_t, double std_pos[],
+void ParticleFilter::Prediction(double delta_t, double std_pos[],
                                 double velocity, double yaw_rate) {
   std::default_random_engine gen;
   std::normal_distribution<double> xNoise(0, std_pos[0]);
@@ -66,8 +66,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   }
 }
 
-void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted,
-                                     std::vector<LandmarkObs> observations) {
+void ParticleFilter::DataAssociation(std::vector<LandMarkObs> predicted,
+                                     std::vector<LandMarkObs> observations) {
   for (size_t i = 0; i < observations.size(); ++i) {
     int min = 1e6;
     int ld_id = -1;
@@ -76,7 +76,7 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted,
     for (size_t j = 0; j < predicted.size(); ++j) {
       double x_pred = predicted[j].x;
       double y_pred = predicted[j].y;
-      double distance = dist(x_pred, y_pred, x_obs, y_obs);
+      double distance = Dist(x_pred, y_pred, x_obs, y_obs);
       if (distance < min) {
         min = distance;
         ld_id = predicted[j].id;
@@ -86,15 +86,15 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted,
   }
 }
 
-void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
-                                   std::vector<LandmarkObs> observations,
+void ParticleFilter::UpdateWeights(double sensor_range, double std_landmark[],
+                                   std::vector<LandMarkObs> observations,
                                    Map map_landmarks) {
   double weights_sum = 0;
   for (auto j = 0; j < num_particles_; ++j) {
     Particle p = particles[j];
-    std::vector<LandmarkObs> predicted;
+    std::vector<LandMarkObs> predicted;
     std::map<int, int> lm2idx;
-    std::vector<LandmarkObs> gObservations(observations.size());
+    std::vector<LandMarkObs> gObservations(observations.size());
     for (size_t i = 0; i < observations.size(); ++i) {
       double x = observations[i].x;
       double y = observations[i].y;
@@ -105,21 +105,21 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
       double x_lm = map_landmarks.landmark_list[k].x_f;
       double y_lm = map_landmarks.landmark_list[k].y_f;
       int id_lm = map_landmarks.landmark_list[k].id_i;
-      double distance = dist(x_lm, y_lm, p.x, p.y);
+      double distance = Dist(x_lm, y_lm, p.x, p.y);
       if (distance <= sensor_range) {
-        LandmarkObs obs = {id_lm, x_lm, y_lm};
+        LandMarkObs obs = {id_lm, x_lm, y_lm};
         predicted.push_back(obs);
         lm2idx[id_lm] = k;
       }
     }
-    dataAssociation(predicted, gObservations);
+    DataAssociation(predicted, gObservations);
     double prob = 1.0;
     double std_x = std_landmark[0];
     double std_y = std_landmark[1];
     double c = 1 / (2 * M_PI * std_x * std_y);
     for (size_t m = 0; m < gObservations.size(); ++m) {
-      LandmarkObs obs = gObservations[m];
-      Map::single_landmark_s lm;
+      LandMarkObs obs = gObservations[m];
+      Map::SingleLandmarks lm;
       int landmark_id = obs.id;
       lm = map_landmarks.landmark_list[lm2idx[landmark_id]];
       double x_obs = obs.x;
@@ -141,7 +141,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
   }
 }
 
-void ParticleFilter::resample() {
+void ParticleFilter::Resample() {
   std::default_random_engine gen;
   std::discrete_distribution<int> d(weights_.begin(), weights_.end());
   std::vector<Particle> resampled_particles(particles.size());
@@ -152,13 +152,13 @@ void ParticleFilter::resample() {
   particles = resampled_particles;
 }
 
-const bool ParticleFilter::initialized() const { return is_initialized_; }
+const bool ParticleFilter::Initialized() const { return is_initialized_; }
 
-double ParticleFilter::dist(double x1, double y1, double x2, double y2) {
+double ParticleFilter::Dist(double x1, double y1, double x2, double y2) {
   return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
 
-bool ParticleFilter::read_map_data(std::string filename, Map map) {
+bool ParticleFilter::ReadMapData(std::string filename, Map map) {
   std::ifstream in_file_map(filename.c_str(), std::ifstream::in);
   if (!in_file_map) {
     return false;
@@ -171,7 +171,7 @@ bool ParticleFilter::read_map_data(std::string filename, Map map) {
     iss_map >> landmark_x_f;
     iss_map >> landmark_y_f;
     iss_map >> id_i;
-    Map::single_landmark_s single_landmark_temp;
+    Map::SingleLandmarks single_landmark_temp;
     single_landmark_temp.id_i = id_i;
     single_landmark_temp.x_f = landmark_x_f;
     single_landmark_temp.y_f = landmark_y_f;
