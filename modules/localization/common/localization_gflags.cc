@@ -42,9 +42,14 @@ DEFINE_string(lmd_adapter_config_file,
               "modules/localization/conf/lmd_adapter.conf",
               "lmd adapter configuration");
 
-DEFINE_string(lmd_rawinput_file,
+DEFINE_string(lmd_rawinput_bag_file,
+              "/apollo/data/bag/data.bag",
+              "lmd rawinput bag file");
+
+DEFINE_string(lmd_rawinput_bin_file,
               "modules/localization/testdata/OdometryLaneMarkers.bin",
-              "lmd rawinput file");
+              "lmd rawinput bin file");
+
 // features
 DEFINE_bool(enable_gps_imu_interprolate, true, "enable GPU/IMU interprolate");
 DEFINE_bool(enable_map_reference_unify, true,

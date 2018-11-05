@@ -22,9 +22,10 @@ namespace apollo {
 namespace localization {
 
 LMProvider::LMProvider() {
-  CHECK(apollo::common::util::GetProtoFromFile(FLAGS_lmd_rawinput_file,
+  CHECK(apollo::common::util::GetProtoFromFile(FLAGS_lmd_rawinput_bin_file,
                                                &LaneMarkersPack_))
-      << "Unable to get raw lanemarkers from file " << FLAGS_lmd_rawinput_file;
+      << "Unable to get raw lanemarkers from file "
+      << FLAGS_lmd_rawinput_bin_file;
 }
 
 const int64_t LMProvider::GetLaneMarkerPackSize() const {
@@ -46,9 +47,9 @@ double LMProvider::CalculateDistance(
 const std::pair<int64_t, int64_t> LMProvider::FindNearestLaneMarkerIndex(
     const apollo::common::PointENU& position) const {
   std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
-                             std::numeric_limits<int64_t>::max());
+                                     std::numeric_limits<int64_t>::max());
   if (GetLaneMarkerPackSize() == 0) {
-    AERROR << "Empty LaneMarkersPack from file " << FLAGS_lmd_rawinput_file;
+    AERROR << "Empty LaneMarkersPack from file " << FLAGS_lmd_rawinput_bin_file;
     return result;
   }
   double distance = std::numeric_limits<double>::max();
@@ -100,7 +101,7 @@ const std::pair<int64_t, int64_t> LMProvider::FindNearestLaneMarkerIndex(
 const std::pair<int64_t, int64_t> LMProvider::GetPrevLaneMarkerIndex(
     const std::pair<int64_t, int64_t>& current_index) const {
   std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
-                             std::numeric_limits<int64_t>::max());
+                                     std::numeric_limits<int64_t>::max());
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second <= 0 ||
@@ -117,7 +118,7 @@ const std::pair<int64_t, int64_t> LMProvider::GetPrevLaneMarkerIndex(
 const std::pair<int64_t, int64_t> LMProvider::GetNextLaneMarkerIndex(
     const std::pair<int64_t, int64_t>& current_index) const {
   std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
-                             std::numeric_limits<int64_t>::max());
+                                     std::numeric_limits<int64_t>::max());
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second < 0 ||
@@ -134,7 +135,7 @@ const std::pair<int64_t, int64_t> LMProvider::GetNextLaneMarkerIndex(
 const std::pair<int64_t, int64_t> LMProvider::GetLeftLaneMarkerIndex(
     const std::pair<int64_t, int64_t>& current_index) const {
   std::pair<int64_t, int64_t> result(std::numeric_limits<int64_t>::max(),
-                             std::numeric_limits<int64_t>::max());
+                                     std::numeric_limits<int64_t>::max());
   if (current_index.first <= 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second < 0 ||
@@ -151,7 +152,7 @@ const std::pair<int64_t, int64_t> LMProvider::GetLeftLaneMarkerIndex(
 const std::pair<int64_t, int64_t> LMProvider::GetRightLaneMarkerIndex(
     const std::pair<int64_t, int64_t>& current_index) const {
   std::pair<int64_t, int64_t> result(std::numeric_limits<int>::max(),
-                             std::numeric_limits<int>::max());
+                                     std::numeric_limits<int>::max());
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() - 1 ||
       current_index.second < 0 ||

@@ -33,7 +33,8 @@ DECLARE_string(rtk_adapter_config_file);
 DECLARE_string(msf_adapter_config_file);
 DECLARE_string(msf_visual_adapter_config_file);
 DECLARE_string(lmd_adapter_config_file);
-DECLARE_string(lmd_rawinput_file);
+DECLARE_string(lmd_rawinput_bag_file);
+DECLARE_string(lmd_rawinput_bin_file);
 
 DECLARE_bool(enable_gps_imu_interprolate);
 DECLARE_bool(enable_map_reference_unify);

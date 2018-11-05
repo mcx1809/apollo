@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "lmd_localization",
     srcs = [
+        "lm_bag_processor.cc",
         "lm_provider.cc",
         "lm_sampler.cc",
         "lmd_particle_filter.cc",
@@ -13,6 +14,7 @@ cc_library(
         "pc_registrator.cc",
     ],
     hdrs = [
+        "lm_bag_processor.h",
         "lm_provider.h",
         "lm_sampler.h",
         "lmd_particle_filter.h",
@@ -42,6 +44,7 @@ cc_test(
     name = "lmd_localization_test",
     size = "small",
     srcs = [
+        "lm_bag_processor_test.cc",
         "lm_provider_test.cc",
         "lm_sampler_test.cc",
         "lmd_localization_test.cc",
