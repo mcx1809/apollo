@@ -14,7 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/lm_provider.h"
+#include "modules/localization/lmd/predictor/perception/lm_provider.h"
 
 #include "gtest/gtest.h"
 

@@ -19,8 +19,8 @@
  * @brief The class of LMProvider.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
-#define MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_LM_PROVIDER_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_LM_PROVIDER_H_
 
 #include <utility>
 
@@ -45,7 +45,7 @@ namespace localization {
 class LMProvider {
  public:
   LMProvider();
-  virtual ~LMProvider();
+
   /**
    * @brief Find the nearest lane marker index with specified position.
    * @param position Specified position.
@@ -124,4 +124,4 @@ class LMProvider {
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_LM_PROVIDER_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_LM_PROVIDER_H_

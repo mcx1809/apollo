@@ -19,14 +19,14 @@
  * @brief The class of LMSampler.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_LM_SAMPLER_H_
-#define MODULES_LOCALIZATION_LMD_LM_SAMPLER_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_LM_SAMPLER_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_LM_SAMPLER_H_
 
 #include <vector>
 
 #include "modules/perception/proto/perception_obstacle.pb.h"
 
-#include "modules/localization/lmd/pc_registrator.h"
+#include "modules/localization/lmd/predictor/perception/pc_registrator.h"
 
 /**
  * @namespace apollo::localization
@@ -108,4 +108,4 @@ class LMSampler {
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_LM_SAMPLER_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_LM_SAMPLER_H_

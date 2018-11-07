@@ -14,7 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/lm_provider.h"
+#include "modules/localization/lmd/predictor/perception/lm_provider.h"
 
 #include <limits>
 
@@ -179,8 +179,6 @@ const apollo::localization::OdometryLaneMarker* LMProvider::GetLaneMarker(
   return &LaneMarkersPack_.lane_markers(current_index.first)
               .lane_marker(current_index.second);
 }
-
-LMProvider::~LMProvider() {}
 
 }  // namespace localization
 }  // namespace apollo

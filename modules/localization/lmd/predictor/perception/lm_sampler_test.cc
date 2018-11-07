@@ -14,7 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/lm_sampler.h"
+#include "modules/localization/lmd/predictor/perception/lm_sampler.h"
 
 #include "gtest/gtest.h"
 
@@ -26,7 +26,7 @@ using apollo::perception::LaneMarkers;
 
 class LMSampleTest : public ::testing::Test {};
 
-TEST(LMSampleTest, SamplingForOneLaneMarker) {
+TEST_F(LMSampleTest, SamplingForOneLaneMarker) {
   LaneMarker lane_marker;
   lane_marker.set_c0_position(1.0);
   lane_marker.set_c1_heading_angle(1.0);

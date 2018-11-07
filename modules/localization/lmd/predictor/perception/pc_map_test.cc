@@ -14,21 +14,22 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/pc_map.h"
+#include "modules/localization/lmd/predictor/perception/pc_map.h"
 
 #include "gtest/gtest.h"
 
-#include "modules/localization/lmd/lm_provider.h"
+#include "modules/localization/lmd/predictor/perception/lm_provider.h"
 
 namespace apollo {
 namespace localization {
+
+using apollo::common::PointENU;
+using apollo::perception::LaneMarker;
 
 namespace {
 constexpr int kPointsNumInsertToMap = 240;
 constexpr double kInsertMapLaneLength = 12.0;
 }  // namespace
-
-using apollo::common::PointENU;
 
 class PCMapTest : public ::testing::Test {};
 
@@ -176,17 +177,17 @@ TEST_F(PCMapTest, PrepareLaneMarkers) {
   position.set_x(681732.77703);
   position.set_y(3112136.72507);
   position.set_z(60.723);
-  apollo::perception::LaneMarker left_lane_marker;
+  LaneMarker left_lane_marker;
   left_lane_marker.set_c0_position(1.48438);
   left_lane_marker.set_c1_heading_angle(-0.00586);
   left_lane_marker.set_c2_curvature(0.00031);
   left_lane_marker.set_c3_curvature_derivative(0.000);
-  apollo::perception::LaneMarker right_lane_marker;
+  LaneMarker right_lane_marker;
   right_lane_marker.set_c0_position(-2.10156);
   right_lane_marker.set_c1_heading_angle(0.00488);
   right_lane_marker.set_c2_curvature(0.00008);
   right_lane_marker.set_c3_curvature_derivative(0.000);
-  apollo::perception::LaneMarkers lane_markers;
+  LaneMarkers lane_markers;
   lane_markers.mutable_left_lane_marker()->CopyFrom(left_lane_marker);
   lane_markers.mutable_right_lane_marker()->CopyFrom(right_lane_marker);
   double heading = -1.19396;

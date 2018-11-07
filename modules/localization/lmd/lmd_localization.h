@@ -117,6 +117,7 @@ class LMDLocalization : public LocalizationBase {
   PCMap pc_map_;
   PCRegistrator pc_registrator_;
   ParticleFilter pc_filter_;
+  bool is_map_ready_ = false;
   bool has_last_pose_ = false;
   Pose last_pose_;
   double last_pose_timestamp_sec_;

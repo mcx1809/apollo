@@ -14,13 +14,17 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/lm_sampler.h"
+#include "modules/localization/lmd/predictor/perception/lm_sampler.h"
 
 namespace apollo {
 namespace localization {
 
 using apollo::perception::LaneMarker;
 using apollo::perception::LaneMarkers;
+
+namespace {
+constexpr int kSamplingNum = 10;
+}  // namespace
 
 LMSampler::LMSampler() { pc_sourcepoint_.clear(); }
 
@@ -46,7 +50,7 @@ double LMSampler::calculate_curvity(double x_value, double c0, double c1,
 
 int LMSampler::SamplingForOneLaneMarker(const LaneMarker& lane_marker) {
   PCSourcePoint point;
-  for (int i = 0; i < 10; i++) {
+  for (auto i = 0; i < kSamplingNum; i++) {
     double x_value = 0.1 * i;
 
     point.position.set_x(x_value);
@@ -90,13 +94,13 @@ const std::vector<PCSourcePoint>& LMSampler::Sampling(
     SamplingForOneLaneMarker(lanemarker);
   }
 
-  for (int i = 0; i < lane_markers.next_left_lane_marker_size(); ++i) {
+  for (auto i = 0; i < lane_markers.next_left_lane_marker_size(); ++i) {
     b_lanemarker = true;
     const auto& lanemarker = lane_markers.next_left_lane_marker(i);
     SamplingForOneLaneMarker(lanemarker);
   }
 
-  for (int i = 0; i < lane_markers.next_right_lane_marker_size(); ++i) {
+  for (auto i = 0; i < lane_markers.next_right_lane_marker_size(); ++i) {
     b_lanemarker = true;
     const auto& lanemarker = lane_markers.next_right_lane_marker(i);
     SamplingForOneLaneMarker(lanemarker);

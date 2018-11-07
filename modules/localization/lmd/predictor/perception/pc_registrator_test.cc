@@ -14,16 +14,16 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/pc_registrator.h"
+#include "modules/localization/lmd/predictor/perception/pc_registrator.h"
 
 #include "gtest/gtest.h"
 
 #include "modules/perception/proto/perception_obstacle.pb.h"
 
 #include "modules/common/math/math_utils.h"
-#include "modules/localization/lmd/lm_provider.h"
-#include "modules/localization/lmd/lm_sampler.h"
-#include "modules/localization/lmd/pc_map.h"
+#include "modules/localization/lmd/predictor/perception/lm_provider.h"
+#include "modules/localization/lmd/predictor/perception/lm_sampler.h"
+#include "modules/localization/lmd/predictor/perception/pc_map.h"
 
 namespace apollo {
 namespace localization {

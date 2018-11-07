@@ -14,7 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/pc_registrator.h"
+#include "modules/localization/lmd/predictor/perception/pc_registrator.h"
 
 #include <algorithm>
 #include <limits>
@@ -125,7 +125,7 @@ void PCRegistrator::Register(const std::vector<PCSourcePoint>& source_points,
     y_range = y_step * 2.0;
   }
 
-  ADEBUG << "on registrating, min error [" << current_error << "]";
+  ADEBUG << "On registrating, min error [" << current_error << "]";
 }
 
 double PCRegistrator::ComputeError(

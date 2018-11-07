@@ -50,8 +50,8 @@ using apollo::perception::PerceptionObstacles;
 
 namespace {
 constexpr double kPCMapSearchRadius = 10.0;
-constexpr int kPointsNumInsertToMap = 480;
-constexpr double kInsertMapLaneLength = 24.0;
+constexpr int kPointsNumInsertToMap = 960;
+constexpr double kInsertMapLaneLength = 48.0;
 }  // namespace
 
 template <class T>
@@ -400,6 +400,16 @@ void LMDLocalization::OnPerceptionObstacles(
     // sampling lane markers
     const auto &lane_markers = obstacles.lane_marker();
     auto source_points = lm_sampler_.Sampling(lane_markers);
+
+    // update pc_map if the map is not ready
+    if (FLAGS_enable_lmd_mapping && !is_map_ready_) {
+      is_map_ready_ = true;
+      auto source_lanes = pc_map_.PrepareLaneMarkers(
+          lane_markers, position_estimated, heading_estimated,
+          kPointsNumInsertToMap, kInsertMapLaneLength);
+      for (const auto &lane : source_lanes) pc_map_.LoadLaneMarker(lane);
+    }
+
     // point cloud registration
     PointENU position;
     double heading;
@@ -409,14 +419,12 @@ void LMDLocalization::OnPerceptionObstacles(
     ADEBUG << "time on registration["
            << ToSecond(Clock::Now() - registration_start_time) << "]";
 
-    // update pc_map_ to contain perception lane_markers
+    // update pc_map to contain perception lane_markers
     if (FLAGS_enable_lmd_mapping) {
       auto source_lanes = pc_map_.PrepareLaneMarkers(
           lane_markers, position, heading, kPointsNumInsertToMap,
           kInsertMapLaneLength);
-      for (auto lane : source_lanes) {
-        pc_map_.LoadLaneMarker(lane);
-      }
+      for (const auto &lane : source_lanes) pc_map_.LoadLaneMarker(lane);
     }
 
     // position

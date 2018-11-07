@@ -19,8 +19,8 @@
  * @brief The class of PCMap.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PC_MAP_H_
-#define MODULES_LOCALIZATION_LMD_PC_MAP_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PC_MAP_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PC_MAP_H_
 
 #include <tuple>
 #include <vector>
@@ -29,10 +29,10 @@
 
 #include "modules/common/math/math_utils.h"
 #include "modules/common/proto/geometry.pb.h"
-#include "modules/common/status/status.h"
-
-#include "modules/localization/lmd/lm_provider.h"
 #include "modules/perception/proto/perception_obstacle.pb.h"
+
+#include "modules/common/status/status.h"
+#include "modules/localization/lmd/predictor/perception/lm_provider.h"
 
 /**
  * @namespace apollo::localization
@@ -100,15 +100,17 @@ class PCMap {
 
     int GetPos(int64_t x, int64_t y) const {
       if (x < cx) {
-        if (y < cy)
+        if (y < cy) {
           return 2;
-        else
+        } else {
           return 0;
+        }
       } else {
-        if (y < cy)
+        if (y < cy) {
           return 3;
-        else
+        } else {
           return 1;
+        }
       }
     }
 
@@ -130,38 +132,41 @@ class PCMap {
     }
 
     bool IsPoint(int pos) const {
-      if (pos == 0)
+      if (pos == 0) {
         return lt_is_point;
-      else if (pos == 1)
+      } else if (pos == 1) {
         return rt_is_point;
-      else if (pos == 2)
+      } else if (pos == 2) {
         return lb_is_point;
-      else
+      } else {
         return rb_is_point;
+      }
     }
 
     void SetPoint(int pos, PCMapIndex point_index) {
       c_index[pos] = point_index;
-      if (pos == 0)
+      if (pos == 0) {
         lt_is_point = 1;
-      else if (pos == 1)
+      } else if (pos == 1) {
         rt_is_point = 1;
-      else if (pos == 2)
+      } else if (pos == 2) {
         lb_is_point = 1;
-      else
+      } else {
         rb_is_point = 1;
+      }
     }
 
     void SetChildNode(int pos, PCMapIndex node_index) {
       c_index[pos] = node_index;
-      if (pos == 0)
+      if (pos == 0) {
         lt_is_point = 0;
-      else if (pos == 1)
+      } else if (pos == 1) {
         rt_is_point = 0;
-      else if (pos == 2)
+      } else if (pos == 2) {
         lb_is_point = 0;
-      else
+      } else {
         rb_is_point = 0;
+      }
     }
 
     void SetParentNode(PCMapIndex node_index) { p_index = node_index; }
@@ -238,7 +243,6 @@ class PCMap {
       const apollo::common::PointENU position, const double heading,
       const double lane_length, const int point_number);
 
- private:
   /**
    * @brief  Generate odometry lane marker according to the source perception
    * lane_marker and given params
@@ -254,9 +258,6 @@ class PCMap {
       const apollo::common::PointENU position, const double heading,
       const double lane_length, const int point_number) const;
 
- private:
-  LMProvider* provider_;
-  std::map<Index2D, Node> nodes_;
   /**
    * @brief  Calculate curve value by given curve params.
    * @param  x_value: value of x.
@@ -333,4 +334,4 @@ class PCMap {
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PC_MAP_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PC_MAP_H_

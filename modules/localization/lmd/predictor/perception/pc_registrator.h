@@ -19,8 +19,8 @@
  * @brief The class of PCRegister.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PC_REGISTRATOR_H_
-#define MODULES_LOCALIZATION_LMD_PC_REGISTRATOR_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PC_REGISTRATOR_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PC_REGISTRATOR_H_
 
 #include <vector>
 
@@ -28,7 +28,7 @@
 
 #include "modules/common/proto/geometry.pb.h"
 
-#include "modules/localization/lmd/pc_map.h"
+#include "modules/localization/lmd/predictor/perception/pc_map.h"
 
 /**
  * @namespace apollo::localization
@@ -84,4 +84,4 @@ class PCRegistrator {
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PC_REGISTRATOR_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PC_REGISTRATOR_H_
