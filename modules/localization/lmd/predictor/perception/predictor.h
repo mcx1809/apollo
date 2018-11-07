@@ -22,6 +22,8 @@
 #ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
 #define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
 
+#include <mutex>
+
 #include "modules/perception/proto/perception_obstacle.pb.h"
 
 #include "modules/localization/lmd/common/tm_list.h"
@@ -77,6 +79,7 @@ class PredictorPerception : Predictor {
   PCMap pc_map_;
   PCRegistrator pc_registrator_;
 
+  std::mutex mutex_;
   TimeMarkedList<std::vector<PCSourcePoint>> lane_markers_samples_;
 };
 
