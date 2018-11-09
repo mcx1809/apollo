@@ -43,7 +43,7 @@ class TimeMarkedList : public std::map<double, Data> {
  public:
   typedef typename std::map<double, Data>::const_iterator Iterator;
 
-  TimeMarkedList(double memory_cycle_sec = 0.0) {
+  explicit TimeMarkedList(double memory_cycle_sec = 0.0) {
     memory_cycle_sec_ = std::max(0.0, memory_cycle_sec);
   }
 

@@ -22,6 +22,8 @@
 #ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
 #define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
 
+#include <vector>
+
 #include "modules/perception/proto/perception_obstacle.pb.h"
 
 #include "modules/localization/lmd/common/tm_list.h"

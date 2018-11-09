@@ -24,7 +24,7 @@ namespace localization {
 TEST(TimeMarkedListTest, InsertAndFind) {
   TimeMarkedList<int> tm(100.0);
   for (auto i = 0; i < 200; ++i) {
-    tm.Push((double)i, i);
+    tm.Push(static_cast<double>(i), i);
   }
 
   EXPECT_EQ(101, tm.size());
@@ -43,12 +43,12 @@ TEST(TimeMarkedListTest, InsertAndFind) {
 TEST(TimeMarkedListTest, Older) {
   TimeMarkedList<int> tm(100.0);
   for (auto i = 0; i < 20; ++i) {
-    tm.Push((double)i, i);
+    tm.Push(static_cast<double>(i), i);
   }
 
   TimeMarkedList<int> tm1(100.0);
   for (auto i = 0; i < 30; ++i) {
-    tm1.Push((double)i, i);
+    tm1.Push(static_cast<double>(i), i);
   }
 
   TimeMarkedList<int> tm2(100.0);
@@ -67,7 +67,7 @@ TEST(TimeMarkedListTest, RangeOf) {
   EXPECT_EQ(tm.end(), p.second);
 
   for (auto i = 5; i <= 20; ++i) {
-    tm.Push((double)i, i);
+    tm.Push(static_cast<double>(i), i);
   }
 
   p = tm.RangeOf(10.5);

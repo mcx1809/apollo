@@ -40,7 +40,7 @@ namespace localization {
  */
 class PoseList : public TimeMarkedList<Pose> {
  public:
-  PoseList(double memory_cycle_sec = 0.0)
+  explicit PoseList(double memory_cycle_sec = 0.0)
       : TimeMarkedList<Pose>(memory_cycle_sec) {}
 
   /**

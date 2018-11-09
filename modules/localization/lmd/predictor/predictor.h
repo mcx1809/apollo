@@ -25,6 +25,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
 
 #include "modules/common/log.h"
 #include "modules/common/status/status.h"
@@ -37,11 +38,9 @@
 namespace apollo {
 namespace localization {
 
-namespace {
 constexpr char kPredictorOutputName[] = "output";
 constexpr char kPredictorImu[] = "imu";
 constexpr char kPredictorPerceptionName[] = "perception";
-}  // namespace
 
 /**
  * @class Predictor

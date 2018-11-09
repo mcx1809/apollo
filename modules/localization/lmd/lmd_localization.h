@@ -25,7 +25,6 @@
 #include <algorithm>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "ros/include/ros/ros.h"
@@ -35,14 +34,8 @@
 #include "modules/localization/proto/imu.pb.h"
 #include "modules/localization/proto/localization.pb.h"
 
-#include "modules/common/math/kalman_filter.h"
 #include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/status/status.h"
-#include "modules/localization/lmd/lm_provider.h"
-#include "modules/localization/lmd/lm_sampler.h"
-#include "modules/localization/lmd/lmd_particle_filter.h"
-#include "modules/localization/lmd/pc_map.h"
-#include "modules/localization/lmd/pc_registrator.h"
 #include "modules/localization/localization_base.h"
 
 /**
@@ -80,30 +73,6 @@ class LMDLocalization : public LocalizationBase {
       const apollo::perception::PerceptionObstacles &obstacles);
   void OnTimer(const ros::TimerEvent &event);
   void PrepareLocalizationMsg(LocalizationEstimate *localization);
-  bool GetGpsPose(const Gps &gps, Pose *pose, double *timestamp_sec);
-  bool PredictPose(const Pose &old_pose, double old_timestamp_sec,
-                   double new_timestamp_sec, Pose *new_pose);
-
-  bool FindMatchingGPS(double timestamp_sec, Gps *gps_msg);
-  bool FindMatchingIMU(double timestamp_sec, CorrectedImu *imu_msg);
-  bool FindMatchingChassis(double timestamp_sec,
-                           apollo::canbus::Chassis *chassis_msg);
-
-  bool PredictByKalman(const Pose &old_pose, double old_timestamp_sec,
-                       double new_timestamp_sec, Pose *new_pose);
-  bool PredictByLinearIntergrate(const Pose &old_pose, double old_timestamp_sec,
-                                 double new_timestamp_sec, Pose *new_pose);
-  bool PredictByLinearIntergrate2(const Pose &old_pose,
-                                  double old_timestamp_sec,
-                                  double new_timestamp_sec, Pose *new_pose);
-  bool PredictByChassis(const Pose &old_pose, double old_timestamp_sec,
-                        double new_timestamp_sec, Pose *new_pose);
-
-  bool PredictByParticleFilter(const Pose &old_pose, double old_timestamp_sec,
-                               double new_timestamp_sec, Pose *new_pose);
-
-  void InitKFENUPredictor(const Pose &pose);
-  void UpdateKFENUPredictor(const Pose &pose, double delta_ts);
 
   void PrintPoseError(const Pose &pose, double timestamp_sec);
   void RunWatchDog();
@@ -112,16 +81,6 @@ class LMDLocalization : public LocalizationBase {
   ros::Timer timer_;
   apollo::common::monitor::MonitorLogger monitor_logger_;
   const std::vector<double> map_offset_;
-  LMProvider lm_provider_;
-  LMSampler lm_sampler_;
-  PCMap pc_map_;
-  PCRegistrator pc_registrator_;
-  ParticleFilter pc_filter_;
-  bool is_map_ready_ = false;
-  bool has_last_pose_ = false;
-  Pose last_pose_;
-  double last_pose_timestamp_sec_;
-  common::math::KalmanFilter<double, 3, 3, 6> kf_enu_predictor_;
 };
 
 }  // namespace localization
