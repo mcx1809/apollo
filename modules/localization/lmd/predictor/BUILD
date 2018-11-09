@@ -9,7 +9,7 @@ cc_library(
     ],
     deps = [
         "//modules/common/status",
-        "//modules/localization/proto:localization_proto",
+        "//modules/localization/lmd/common:localization_lmd_common",
     ],
 )
 

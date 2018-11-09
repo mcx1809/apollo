@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2017 The Apollo Authors. All Rights Reserved.
+ * Copyright 2018 The Apollo Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -232,11 +232,11 @@ class PCMap {
    * @brief  Prepare odometry lane markers according to the source perception
    * lane_markers and given params
    * @param source The source perception lane markers.
-   * @param position The ENU position after pc registration
-   * @param heading The heading value after pc registration
-   * @param lane_length The length to sample points
-   * @param point_number The total sample point number
-   * @return The vector contains the generated odometry lane markers
+   * @param position The ENU position after pc registration.
+   * @param heading The heading value after pc registration.
+   * @param lane_length The length to sample points.
+   * @param point_number The total sample point number.
+   * @return The vector contains the generated odometry lane markers.
    */
   std::vector<OdometryLaneMarker> PrepareLaneMarkers(
       const apollo::perception::LaneMarkers& source,
@@ -247,11 +247,11 @@ class PCMap {
    * @brief  Generate odometry lane marker according to the source perception
    * lane_marker and given params
    * @param lanemarker The source perception lanemarker.
-   * @param position The ENU position after pc registration
-   * @param heading The heading value after pc registration
-   * @param lane_length The length to sample points
-   * @param point_number The total sample point number
-   * @return The generated odometry lane marker
+   * @param position The ENU position after pc registration.
+   * @param heading The heading value after pc registration.
+   * @param lane_length The length to sample points.
+   * @param point_number The total sample point number.
+   * @return The generated odometry lane marker.
    */
   const OdometryLaneMarker GenerateOdometryLaneMarker(
       const apollo::perception::LaneMarker& lanemarker,

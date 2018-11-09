@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2017 The Apollo Authors. All Rights Reserved.
+ * Copyright 2018 The Apollo Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,53 +17,93 @@
 #include "modules/localization/lmd/predictor/perception/predictor.h"
 
 #include "modules/common/log.h"
-
+#include "modules/common/math/quaternion.h"
 #include "modules/localization/common/localization_gflags.h"
 
 namespace apollo {
 namespace localization {
 
+using apollo::common::ErrorCode;
+using apollo::common::PointENU;
 using apollo::common::Status;
+using apollo::common::math::HeadingToQuaternion;
 using apollo::perception::LaneMarkers;
 
 namespace {
-constexpr double kLaneMarkersSampleListDepth = 2.0;
+constexpr double kPCMapSearchRadius = 10.0;
 }  // namespace
 
-PredictorPerception::PredictorPerception()
-    : pc_map_(FLAGS_enable_lmd_premapping ? &lm_provider_ : nullptr),
+PredictorPerception::PredictorPerception(double memory_cycle_sec)
+    : Predictor(memory_cycle_sec),
+      pc_map_(FLAGS_enable_lmd_premapping ? &lm_provider_ : nullptr),
       pc_registrator_(&pc_map_),
-      lane_markers_samples_(kLaneMarkersSampleListDepth) {}
+      lane_markers_samples_(memory_cycle_sec) {
+  name_ = kPredictorPerceptionName;
+  dep_names_.emplace(kPredictorOutputName);
+  Init(memory_cycle_sec);
+}
 
 PredictorPerception::~PredictorPerception() {}
 
-Status PredictorPerception::Predict(const Pose& old_pose,
-                                    double old_timestamp_sec,
-                                    double new_timestamp_sec, Pose* new_pose) {
-  CHECK_NOTNULL(new_pose);
-
-  { auto lock = std::unique_lock<decltype(mutex_)>(mutex); }
-
-  const auto& position_estimated = new_pose.position();
-  auto heading_estimated = new_pose.heading();
+Status PredictorPerception::UpdateLaneMarkers(double timestamp_sec,
+                                              const LaneMarkers& lane_markers) {
+  // sampling lane markers
+  auto sample = lm_sampler_.Sampling(lane_markers);
+  if (!lane_markers_samples_.Push(timestamp_sec, sample)) {
+    AWARN << "Failed push lane_markers_samples to list, with timestamp["
+          << timestamp_sec << "]";
+  }
 
   return Status::OK();
 }
 
-Status UpdateLaneMarkers(double timestamp_sec,
-                         const LaneMarkers& lane_markers) {
-  auto lane_markers_samples = lm_sampler_.Sampling(lane_markers);
+bool PredictorPerception::Updateable() const {
+  auto output_it = dep_predicteds_.find(kPredictorOutputName);
+  return predicted_.Older(lane_markers_samples_) && !output_it->second.empty();
+}
 
-  bool ret;
-  {
-    auto lock = std::unique_lock<decltype(mutex_)>(mutex);
-    ret = lane_markers_samples_.Push(timestamp_sec, lane_markers_samples);
+Status PredictorPerception::Update() {
+  auto latest_sample_it = lane_markers_samples_.Latest();
+  auto timestamp_sec = latest_sample_it->first;
+  const auto& latest_sample = latest_sample_it->second;
+
+  // get estimated pose for timestamp_sec
+  const auto& output = dep_predicteds_[kPredictorOutputName];
+  Pose pose_estimated;
+  output.FindNearestPose(timestamp_sec, &pose_estimated);
+  if (!pose_estimated.has_position() || !pose_estimated.position().has_x() ||
+      !pose_estimated.position().has_y() ||
+      !pose_estimated.position().has_z() || !pose_estimated.has_heading()) {
+    AERROR << "Pose has not some field";
+    return Status(ErrorCode::LOCALIZATION_ERROR, "Pose has not some field");
+  }
+  const auto& position_estimated = pose_estimated.position();
+  auto heading_estimated = pose_estimated.heading();
+
+  // update pc_map
+  auto ret = pc_map_.UpdateRange(position_estimated, kPCMapSearchRadius);
+  if (ret != Status::OK()) {
+    AERROR << "Update pc_map failed";
+    return ret;
   }
 
-  if (!ret) {
-    AWARN << "Failed push lane_markers_samples to list, with timestamp["
-          << timestamp_sec << "]";
-  }
+  // position and heading registration
+  PointENU position;
+  double heading;
+  pc_registrator_.Register(latest_sample, position_estimated, heading_estimated,
+                           &position, &heading);
+
+  // fill pose
+  Pose pose;
+  pose.CopyFrom(pose_estimated);
+  pose.mutable_position()->CopyFrom(position);
+  pose.set_heading(heading);
+  // TODO(all): orientation Need to be more precise
+  auto orientation = HeadingToQuaternion(heading);
+  pose.mutable_orientation()->set_qx(orientation.x());
+  pose.mutable_orientation()->set_qy(orientation.y());
+  pose.mutable_orientation()->set_qz(orientation.z());
+  pose.mutable_orientation()->set_qw(orientation.w());
 
   return Status::OK();
 }

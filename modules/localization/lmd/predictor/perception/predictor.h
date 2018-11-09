@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2017 The Apollo Authors. All Rights Reserved.
+ * Copyright 2018 The Apollo Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@
 #ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
 #define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
 
-#include <mutex>
-
 #include "modules/perception/proto/perception_obstacle.pb.h"
 
 #include "modules/localization/lmd/common/tm_list.h"
@@ -45,23 +43,10 @@ namespace localization {
  *
  * @brief  Implementation of predictor.
  */
-class PredictorPerception : Predictor {
+class PredictorPerception : public Predictor {
  public:
-  PredictorPerception();
+  explicit PredictorPerception(double memory_cycle_sec);
   virtual ~PredictorPerception();
-
-  /**
-   * @brief  Overrided implementation of the virtual function "Predict" in the
-   * base class "Predictor".
-   * @param old_pose The pose before prediction.
-   * @param old_timestamp_sec The timestamp before prediction.
-   * @param new_timestamp_sec The timestamp for prediction.
-   * @param new_pose The predicted pose for output.
-   * @return Status::OK() if success; error otherwise.
-   */
-  apollo::common::Status Predict(const Pose &old_pose, double old_timestamp_sec,
-                                 double new_timestamp_sec,
-                                 Pose *new_pose) override;
 
   /**
    * @brief Update lane markers from perception.
@@ -73,13 +58,26 @@ class PredictorPerception : Predictor {
       double timestamp_sec,
       const apollo::perception::LaneMarkers &lane_markers);
 
+  /**
+   * @brief Overrided implementation of the virtual function "Updateable" in the
+   * base class "Predictor".
+   * @return True if yes; no otherwise.
+   */
+  bool Updateable() const override;
+
+  /**
+   * @brief Overrided implementation of the virtual function "Update" in the
+   * base class "Predictor".
+   * @return Status::OK() if success; error otherwise.
+   */
+  apollo::common::Status Update() override;
+
  private:
   LMSampler lm_sampler_;
   LMProvider lm_provider_;
   PCMap pc_map_;
   PCRegistrator pc_registrator_;
 
-  std::mutex mutex_;
   TimeMarkedList<std::vector<PCSourcePoint>> lane_markers_samples_;
 };
 
