@@ -22,8 +22,10 @@
 #ifndef MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
 #define MODULES_LOCALIZATION_LMD_LMD_LOCALIZATION_H_
 
-#include <algorithm>
-#include <sstream>
+#include <chrono>
+#include <future>
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,9 +35,11 @@
 #include "modules/localization/proto/gps.pb.h"
 #include "modules/localization/proto/imu.pb.h"
 #include "modules/localization/proto/localization.pb.h"
+#include "modules/perception/proto/perception_obstacle.pb.h"
 
 #include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/status/status.h"
+#include "modules/localization/lmd/predictor/predictor.h"
 #include "modules/localization/localization_base.h"
 
 /**
@@ -51,6 +55,23 @@ namespace localization {
  * @brief Generate localization info based on LMD.
  */
 class LMDLocalization : public LocalizationBase {
+  struct PredictorHandler {
+    std::shared_ptr<Predictor> predictor;
+    std::future<apollo::common::Status> fut;
+
+    PredictorHandler() = default;
+
+    explicit PredictorHandler(Predictor *predictor) {
+      this->predictor.reset(predictor);
+    }
+
+    bool Busy() const {
+      if (fut.valid()) return false;
+      auto s = fut.wait_for(std::chrono::seconds::zero());
+      return s != std::future_status::ready;
+    }
+  };
+
  public:
   LMDLocalization();
   virtual ~LMDLocalization();
@@ -68,19 +89,23 @@ class LMDLocalization : public LocalizationBase {
   apollo::common::Status Stop() override;
 
  private:
+  void OnImu(const CorrectedImu &imu);
   void OnGps(const Gps &gps);
+  void OnChassis(const apollo::canbus::Chassis &chassis);
   void OnPerceptionObstacles(
       const apollo::perception::PerceptionObstacles &obstacles);
   void OnTimer(const ros::TimerEvent &event);
-  void PrepareLocalizationMsg(LocalizationEstimate *localization);
 
-  void PrintPoseError(const Pose &pose, double timestamp_sec);
+  void Predicting();
   void RunWatchDog();
 
  private:
   ros::Timer timer_;
   apollo::common::monitor::MonitorLogger monitor_logger_;
   const std::vector<double> map_offset_;
+
+  std::map<std::string, PredictorHandler> predictors_;
+  PredictorHandler *perception_;
 };
 
 }  // namespace localization

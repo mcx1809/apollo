@@ -54,11 +54,10 @@ class PredictorPerception : public Predictor {
    * @brief Update lane markers from perception.
    * @param timestamp_sec The timestamp of lane markers.
    * @param lane_markers The lane markers.
-   * @return Status::OK() if success; error otherwise.
+   * @return True if success; false if not needed.
    */
-  apollo::common::Status UpdateLaneMarkers(
-      double timestamp_sec,
-      const apollo::perception::LaneMarkers &lane_markers);
+  bool UpdateLaneMarkers(double timestamp_sec,
+                         const apollo::perception::LaneMarkers &lane_markers);
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the

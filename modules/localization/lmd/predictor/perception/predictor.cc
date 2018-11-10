@@ -39,22 +39,22 @@ PredictorPerception::PredictorPerception(double memory_cycle_sec)
       pc_registrator_(&pc_map_),
       lane_markers_samples_(memory_cycle_sec) {
   name_ = kPredictorPerceptionName;
-  dep_names_.emplace(kPredictorOutputName);
-  Init(memory_cycle_sec);
+  dep_predicteds_[kPredictorOutputName];
 }
 
 PredictorPerception::~PredictorPerception() {}
 
-Status PredictorPerception::UpdateLaneMarkers(double timestamp_sec,
-                                              const LaneMarkers& lane_markers) {
+bool PredictorPerception::UpdateLaneMarkers(double timestamp_sec,
+                                            const LaneMarkers& lane_markers) {
   // sampling lane markers
   auto sample = lm_sampler_.Sampling(lane_markers);
   if (!lane_markers_samples_.Push(timestamp_sec, sample)) {
     AWARN << "Failed push lane_markers_samples to list, with timestamp["
           << timestamp_sec << "]";
+    return false;
   }
 
-  return Status::OK();
+  return true;
 }
 
 bool PredictorPerception::Updateable() const {
@@ -104,6 +104,9 @@ Status PredictorPerception::Update() {
   pose.mutable_orientation()->set_qy(orientation.y());
   pose.mutable_orientation()->set_qz(orientation.z());
   pose.mutable_orientation()->set_qw(orientation.w());
+
+  // Add pose to predicted list
+  predicted_.Push(timestamp_sec, pose);
 
   return Status::OK();
 }

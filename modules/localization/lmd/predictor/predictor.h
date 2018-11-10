@@ -23,7 +23,6 @@
 #define MODULES_LOCALIZATION_LMD_COMMON_PREDICTOR_PREDICTOR_H_
 
 #include <map>
-#include <set>
 #include <string>
 #include <utility>
 
@@ -62,15 +61,11 @@ class Predictor {
 
   /**
    * @brief Get names of the deps.
-   * @return names of deps.
+   * @return Predicteds of deps.
    */
-  const std::set<std::string>& DepPredictors() const { return dep_names_; }
-
-  /**
-   * @brief Get predicted list.
-   * @return Predicted list.
-   */
-  const PoseList& Predicted() const { return predicted_; }
+  const std::map<std::string, PoseList>& DepPredicteds() const {
+    return dep_predicteds_;
+  }
 
   /**
    * @brief Update predicted list of deps.
@@ -80,11 +75,18 @@ class Predictor {
   }
 
   void UpdateDepPredicted(const std::string& name, PoseList&& predicted) {
-    auto it = dep_names_.find(name);
-    CHECK(it != dep_names_.end());
-
-    dep_predicteds_.emplace(name, std::move(predicted));
+    auto it = dep_predicteds_.find(name);
+    CHECK(it != dep_predicteds_.end());
+    it->second = std::move(predicted);
   }
+
+  /**
+   * @brief Get predicted list.
+   * @return Predicted list.
+   */
+  const PoseList& Predicted() const { return predicted_; }
+
+  bool UpdatingOnAdapterThread() const { return on_adapter_thread; }
 
   /**
    * @brief Is predicted list updateable.
@@ -99,22 +101,11 @@ class Predictor {
   virtual apollo::common::Status Update();
 
  protected:
-  /**
-   * @brief Initialization.
-   * @param memory_cycle_sec The cycle of memory.
-   */
-  void Init(double memory_cycle_sec) {
-    for (const auto& dep_name : dep_names_) {
-      dep_predicteds_.emplace(dep_name, PoseList(memory_cycle_sec));
-    }
-  }
-
- protected:
-  std::set<std::string> dep_names_;
   std::string name_;
 
   std::map<std::string, PoseList> dep_predicteds_;
   PoseList predicted_;
+  bool on_adapter_thread = false;
 };
 
 }  // namespace localization
