@@ -59,6 +59,25 @@ TEST(TimeMarkedListTest, Older) {
   EXPECT_FALSE(tm2.Older(tm1));
 }
 
+TEST(TimeMarkedListTest, Newer) {
+  TimeMarkedList<int> tm(100.0);
+  for (auto i = 0; i < 20; ++i) {
+    tm.Push(static_cast<double>(i), i);
+  }
+
+  TimeMarkedList<int> tm1(100.0);
+  for (auto i = 0; i < 30; ++i) {
+    tm1.Push(static_cast<double>(i), i);
+  }
+
+  TimeMarkedList<int> tm2(100.0);
+
+  EXPECT_TRUE(tm1.Newer(tm));
+  EXPECT_FALSE(tm.Newer(tm1));
+  EXPECT_FALSE(tm2.Newer(tm));
+  EXPECT_FALSE(tm1.Newer(tm2));
+}
+
 TEST(TimeMarkedListTest, RangeOf) {
   TimeMarkedList<int> tm(100.0);
 

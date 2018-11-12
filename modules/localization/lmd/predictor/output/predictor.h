@@ -16,11 +16,11 @@
 
 /**
  * @file predictor.h
- * @brief The class of PredictorPerception.
+ * @brief The class of PredictorOutput.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
-#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
 
 #include <vector>
 
@@ -85,4 +85,4 @@ class PredictorPerception : public Predictor {
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_

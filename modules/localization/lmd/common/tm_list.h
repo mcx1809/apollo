@@ -105,6 +105,23 @@ class TimeMarkedList : public std::map<double, Data> {
     return false;
   }
 
+  template <class T>
+  bool Newer(const TimeMarkedList<T>& other) const {
+    auto it = other.Latest();
+    if (it != other.end()) {
+      return Newer(it->first);
+    }
+    return false;
+  }
+
+  bool Newer(double timestamp_sec) const {
+    auto it = Latest();
+    if (it != std::map<double, Data>::end()) {
+      return it->first > timestamp_sec;
+    }
+    return false;
+  }
+
   std::pair<Iterator, Iterator> RangeOf(double timestamp_sec) const {
     auto upper = std::map<double, Data>::lower_bound(timestamp_sec);
     Iterator lower;

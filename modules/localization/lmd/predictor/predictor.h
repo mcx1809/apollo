@@ -39,6 +39,7 @@ namespace localization {
 
 constexpr char kPredictorOutputName[] = "output";
 constexpr char kPredictorImu[] = "imu";
+constexpr char kPredictorGps[] = "gps";
 constexpr char kPredictorPerceptionName[] = "perception";
 
 /**

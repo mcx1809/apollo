@@ -16,21 +16,14 @@
 
 /**
  * @file predictor.h
- * @brief The class of PredictorPerception.
+ * @brief The class of PredictorGps.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
-#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_GPS_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_GPS_H_
 
-#include <vector>
+#include "modules/localization/proto/gps.pb.h"
 
-#include "modules/perception/proto/perception_obstacle.pb.h"
-
-#include "modules/localization/lmd/common/tm_list.h"
-#include "modules/localization/lmd/predictor/perception/lm_provider.h"
-#include "modules/localization/lmd/predictor/perception/lm_sampler.h"
-#include "modules/localization/lmd/predictor/perception/pc_map.h"
-#include "modules/localization/lmd/predictor/perception/pc_registrator.h"
 #include "modules/localization/lmd/predictor/predictor.h"
 
 /**
@@ -41,23 +34,21 @@ namespace apollo {
 namespace localization {
 
 /**
- * @class PredictorPerception
+ * @class PredictorImu
  *
  * @brief  Implementation of predictor.
  */
-class PredictorPerception : public Predictor {
+class PredictorGps : public Predictor {
  public:
-  explicit PredictorPerception(double memory_cycle_sec);
-  virtual ~PredictorPerception();
+  explicit PredictorGps(double memory_cycle_sec);
+  virtual ~PredictorGps();
 
   /**
-   * @brief Update lane markers from perception.
-   * @param timestamp_sec The timestamp of lane markers.
-   * @param lane_markers The lane markers.
+   * @brief Update poses from gps.
+   * @param gps The message from gps.
    * @return True if success; false if not needed.
    */
-  bool UpdateLaneMarkers(double timestamp_sec,
-                         const apollo::perception::LaneMarkers &lane_markers);
+  bool UpdateGps(const Gps &gps);
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the
@@ -74,15 +65,10 @@ class PredictorPerception : public Predictor {
   apollo::common::Status Update() override;
 
  private:
-  LMSampler lm_sampler_;
-  LMProvider lm_provider_;
-  PCMap pc_map_;
-  PCRegistrator pc_registrator_;
-
-  TimeMarkedList<std::vector<PCSourcePoint>> lane_markers_samples_;
+  double latest_timestamp_sec_;
 };
 
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_GPS_H_
