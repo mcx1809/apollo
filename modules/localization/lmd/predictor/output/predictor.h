@@ -25,6 +25,8 @@
 #include <functional>
 #include <vector>
 
+#include "gtest/gtest.h"
+
 #include "modules/localization/lmd/predictor/predictor.h"
 
 /**
@@ -63,15 +65,18 @@ class PredictorOutput : public Predictor {
 
  private:
   apollo::common::Status PublishLatestLocalization();
-  void PrintPoseError(const Pose &pose, double timestamp_sec);
+  void PrintPoseError(double timestamp_sec, const Pose &pose);
 
-  bool PredictByImu(const Pose &old_pose, double old_timestamp_sec,
+  bool PredictByImu(double old_timestamp_sec, const Pose &old_pose,
                     double new_timestamp_sec, Pose *new_pose);
 
  private:
   const std::vector<double> map_offset_;
   std::function<apollo::common::Status(const LocalizationEstimate &)>
       publish_loc_func_;
+  int print_error_ctl_ = 0;
+
+  FRIEND_TEST(PredictorOutputTest, PredictByImu);
 };
 
 }  // namespace localization

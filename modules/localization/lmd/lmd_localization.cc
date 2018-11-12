@@ -112,72 +112,68 @@ Status LMDLocalization::Stop() {
 
 void LMDLocalization::OnImu(const CorrectedImu &imu) {
   if (!imu_->Busy()) {
-    // take a snapshot of the current received messages
-    AdapterManager::Observe();
-
     // update messages
-    auto *adapter = AdapterManager::GetImu();
-    for (const auto &msg : *adapter) {
-      auto *predictor = static_cast<PredictorImu *>(imu_->predictor.get());
-      if (!predictor->UpdateImu(*msg)) {
-        break;
-      }
+    auto *predictor = static_cast<PredictorImu *>(imu_->predictor.get());
+    for (const auto &imu : imu_list_) {
+      predictor->UpdateImu(imu);
     }
+    imu_list_.clear();
+    predictor->UpdateImu(imu);
 
     // predicting
     Predicting();
+  } else {
+    imu_list_.emplace_back(imu);
   }
 }
 
 void LMDLocalization::OnGps(const Gps &gps) {
   if (!gps_->Busy()) {
-    // take a snapshot of the current received messages
-    AdapterManager::Observe();
-
     // update messages
-    auto *adapter = AdapterManager::GetGps();
-    for (const auto &msg : *adapter) {
-      auto *predictor = static_cast<PredictorGps *>(gps_->predictor.get());
-      if (!predictor->UpdateGps(*msg)) {
-        break;
-      }
+    auto *predictor = static_cast<PredictorGps *>(gps_->predictor.get());
+    for (const auto &gps : gps_list_) {
+      predictor->UpdateGps(gps);
     }
+    gps_list_.clear();
+    predictor->UpdateGps(gps);
 
     // predicting
     Predicting();
+  } else {
+    gps_list_.emplace_back(gps);
   }
 }
 
-void LMDLocalization::OnChassis(const Chassis &chassis) {
-  // take a snapshot of the current received messages
-  AdapterManager::Observe();
-}
+void LMDLocalization::OnChassis(const Chassis &chassis) {}
 
 void LMDLocalization::OnPerceptionObstacles(
     const PerceptionObstacles &obstacles) {
   if (!perception_->Busy()) {
-    // take a snapshot of the current received messages
-    AdapterManager::Observe();
-
-    // update lane markers
-    auto *adapter = AdapterManager::GetPerceptionObstacles();
-    for (const auto &msg : *adapter) {
-      if (!msg->has_header() || !msg->header().has_timestamp_sec() ||
-          !msg->has_lane_marker()) {
+    // update messages
+    auto *predictor =
+        static_cast<PredictorPerception *>(perception_->predictor.get());
+    for (const auto &obstacles : obstacles_list_) {
+      if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
+          !obstacles.has_lane_marker()) {
         AERROR << "Message has not some feilds";
         continue;
       }
-
-      auto *predictor =
-          static_cast<PredictorPerception *>(perception_->predictor.get());
-      if (!predictor->UpdateLaneMarkers(msg->header().timestamp_sec(),
-                                        msg->lane_marker())) {
-        break;
-      }
+      predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
+                                   obstacles.lane_marker());
+    }
+    obstacles_list_.clear();
+    if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
+        !obstacles.has_lane_marker()) {
+      AERROR << "Message has not some feilds";
+    } else {
+      predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
+                                   obstacles.lane_marker());
     }
 
     // predicting
     Predicting();
+  } else {
+    obstacles_list_.emplace_back(obstacles);
   }
 }
 
@@ -208,7 +204,8 @@ void LMDLocalization::Predicting() {
             continue;
           }
           const auto &dep_predicted = dep_p.second;
-          if (dep_predicted.Older(dep_ph.predictor->Predicted())) {
+          if (dep_predicted.empty() ||
+              dep_predicted.Older(dep_ph.predictor->Predicted())) {
             ph.predictor->UpdateDepPredicted(dep_name,
                                              dep_ph.predictor->Predicted());
           }
@@ -219,19 +216,17 @@ void LMDLocalization::Predicting() {
     // predict
     for (auto &p : predictors_) {
       auto &ph = p.second;
-      if (!ph.Busy()) {
-        if (ph.predictor->Updateable()) {
-          finish = false;
+      if (!ph.Busy() && ph.predictor->Updateable()) {
+        finish = false;
 
-          if (ph.predictor->UpdatingOnAdapterThread()) {
-            ph.predictor->Update();
-          } else {
-            auto predictor = ph.predictor;
-            ph.fut =
-                ThreadPool::pool()->push([=](int thread_id) mutable -> Status {
-                  return predictor->Update();
-                });
-          }
+        if (ph.predictor->UpdatingOnAdapterThread()) {
+          ph.predictor->Update();
+        } else {
+          auto predictor = ph.predictor;
+          ph.fut =
+              ThreadPool::pool()->push([=](int thread_id) mutable -> Status {
+                return predictor->Update();
+              });
         }
       }
     }

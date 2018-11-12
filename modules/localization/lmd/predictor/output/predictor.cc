@@ -158,7 +158,7 @@ Status PredictorOutput::Update() {
 
       if (perception_base_timestamp_sec >= output_base_timestamp_sec) {
         base_timestamp_sec = perception_base_timestamp_sec;
-        PredictByImu(output_base_pose, output_base_timestamp_sec,
+        PredictByImu(output_base_timestamp_sec, output_base_pose,
                      base_timestamp_sec, &base_pose);
         // assign position and heading from perception
         base_pose.mutable_position()->CopyFrom(perception_base_pose.position());
@@ -176,7 +176,7 @@ Status PredictorOutput::Update() {
 
     // predict
     Pose pose;
-    PredictByImu(base_pose, base_timestamp_sec, timestamp_sec, &pose);
+    PredictByImu(base_timestamp_sec, base_pose, timestamp_sec, &pose);
 
     // push pose to list
     predicted_.Push(timestamp_sec, pose);
@@ -199,16 +199,17 @@ Status PredictorOutput::PublishLatestLocalization() {
   pose->mutable_position()->set_y(pose->position().y() - map_offset_[1]);
   pose->mutable_position()->set_z(pose->position().z() - map_offset_[2]);
 
-  // publish localization messages
-  auto ret = publish_loc_func_(localization);
-  if (ret == Status::OK()) {
-    ADEBUG << "Localization message publish success";
+  // print error
+  constexpr int print_error_cycle = 10;
+  if (!((++print_error_ctl_) % print_error_cycle)) {
+    PrintPoseError(latest->first, latest->second);
   }
 
-  return ret;
+  // publish localization messages
+  return publish_loc_func_(localization);
 }
 
-void PredictorOutput::PrintPoseError(const Pose& pose, double timestamp_sec) {
+void PredictorOutput::PrintPoseError(double timestamp_sec, const Pose& pose) {
   const auto& gps = dep_predicteds_[kPredictorGpsName];
   Pose gps_pose;
   if (!gps.FindNearestPose(timestamp_sec, &gps_pose)) {
@@ -258,8 +259,8 @@ void PredictorOutput::PrintPoseError(const Pose& pose, double timestamp_sec) {
          << "], lateral[" << flu_dvy << "]";
 }
 
-bool PredictorOutput::PredictByImu(const Pose& old_pose,
-                                   double old_timestamp_sec,
+bool PredictorOutput::PredictByImu(double old_timestamp_sec,
+                                   const Pose& old_pose,
                                    double new_timestamp_sec, Pose* new_pose) {
   if (!old_pose.has_position() || !old_pose.has_orientation() ||
       !old_pose.has_linear_velocity()) {
@@ -268,12 +269,17 @@ bool PredictorOutput::PredictByImu(const Pose& old_pose,
   }
 
   const auto& imu = dep_predicteds_[kPredictorImuName];
-  auto it = imu.RangeOf(old_timestamp_sec).first;
+  auto p = imu.RangeOf(old_timestamp_sec);
+  auto it = p.first;
   if (it == imu.end()) {
-    AERROR << std::setprecision(15)
-           << "Cannot get the lower of range from imu with timestamp["
-           << old_timestamp_sec << "]";
-    return false;
+    if (p.second != imu.end()) {
+      it = p.second;
+    } else {
+      AERROR << std::setprecision(15)
+             << "Cannot get the lower of range from imu with timestamp["
+             << old_timestamp_sec << "]";
+      return false;
+    }
   }
 
   auto timestamp_sec = old_timestamp_sec;
@@ -309,11 +315,23 @@ bool PredictorOutput::PredictByImu(const Pose& old_pose,
     }
 
     auto dt = timestamp_sec_1 - timestamp_sec;
-
-    auto angular_velocity = imu_pose.angular_velocity();
-    auto angular_velocity_1 = imu_pose_1.angular_velocity();
-
     auto orientation = new_pose->orientation();
+
+    Point3D angular_velocity;
+    if (FLAGS_enable_map_reference_unify) {
+      angular_velocity.CopyFrom(
+          QuaternionRotateXYZ(imu_pose.angular_velocity(), orientation));
+    } else {
+      angular_velocity.CopyFrom(imu_pose.angular_velocity());
+    }
+    Point3D angular_velocity_1;
+    if (FLAGS_enable_map_reference_unify) {
+      angular_velocity_1.CopyFrom(
+          QuaternionRotateXYZ(imu_pose_1.angular_velocity(), orientation));
+    } else {
+      angular_velocity_1.CopyFrom(imu_pose_1.angular_velocity());
+    }
+
     Point3D angular_vel;
     angular_vel.set_x((angular_velocity.x() + angular_velocity_1.x()) / 2.0);
     angular_vel.set_y((angular_velocity.y() + angular_velocity_1.y()) / 2.0);
@@ -348,7 +366,7 @@ bool PredictorOutput::PredictByImu(const Pose& old_pose,
     }
     Point3D linear_acceleration_1;
     if (FLAGS_enable_map_reference_unify) {
-      linear_acceleration.CopyFrom(
+      linear_acceleration_1.CopyFrom(
           QuaternionRotateXYZ(imu_pose_1.linear_acceleration(), orientation_1));
     } else {
       linear_acceleration_1.CopyFrom(imu_pose_1.linear_acceleration());

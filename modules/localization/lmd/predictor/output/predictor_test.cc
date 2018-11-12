@@ -21,7 +21,41 @@
 namespace apollo {
 namespace localization {
 
+using apollo::common::Status;
+
 class PredictorOutputTest : public ::testing::Test {};
+
+TEST_F(PredictorOutputTest, PredictByImu) {
+  PredictorOutput predictor(
+      10.0,
+      [&](const LocalizationEstimate& localization) { return Status::OK(); });
+
+  auto& imu = predictor.dep_predicteds_[kPredictorImuName];
+  Pose imu_pose;
+  imu_pose.mutable_linear_acceleration()->set_x(1.0);
+  imu_pose.mutable_linear_acceleration()->set_y(1.0);
+  imu_pose.mutable_linear_acceleration()->set_z(0.0);
+  imu_pose.mutable_angular_velocity()->set_x(0.0);
+  imu_pose.mutable_angular_velocity()->set_y(0.0);
+  imu_pose.mutable_angular_velocity()->set_z(0.0);
+  imu.Push(0.0, imu_pose);
+  imu.Push(3.0, imu_pose);
+
+  Pose old_pose;
+  old_pose.mutable_position()->set_x(0.0);
+  old_pose.mutable_position()->set_y(0.0);
+  old_pose.mutable_position()->set_z(0.0);
+  old_pose.mutable_orientation()->set_qw(1.0);
+  old_pose.mutable_orientation()->set_qx(0.0);
+  old_pose.mutable_orientation()->set_qy(0.0);
+  old_pose.mutable_orientation()->set_qz(0.0);
+  old_pose.mutable_linear_velocity()->set_x(0.0);
+  old_pose.mutable_linear_velocity()->set_y(0.0);
+  old_pose.mutable_linear_velocity()->set_z(0.0);
+
+  Pose new_pose;
+  EXPECT_TRUE(predictor.PredictByImu(0.0, old_pose, 1.0, &new_pose));
+}
 
 }  // namespace localization
 }  // namespace apollo

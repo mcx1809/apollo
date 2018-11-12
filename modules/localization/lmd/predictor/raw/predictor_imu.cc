@@ -14,6 +14,8 @@
  * limitations under the License.
  *****************************************************************************/
 
+#include <iomanip>
+
 #include "modules/localization/lmd/predictor/raw/predictor_imu.h"
 
 #include "modules/common/log.h"
@@ -40,7 +42,8 @@ bool PredictorImu::UpdateImu(const CorrectedImu& imu) {
 
   auto timestamp_sec = imu.header().timestamp_sec();
   if (!predicted_.Push(timestamp_sec, imu.imu())) {
-    AWARN << "Failed push pose to list, with timestamp[" << timestamp_sec
+    AWARN << std::setprecision(15)
+          << "Failed push pose to list, with timestamp[" << timestamp_sec
           << "]";
     return false;
   }

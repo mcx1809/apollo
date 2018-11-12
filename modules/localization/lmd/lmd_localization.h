@@ -24,6 +24,7 @@
 
 #include <chrono>
 #include <future>
+#include <list>
 #include <map>
 #include <memory>
 #include <string>
@@ -31,15 +32,14 @@
 #include "ros/include/ros/ros.h"
 
 #include "modules/canbus/proto/chassis.pb.h"
-#include "modules/localization/proto/gps.pb.h"
-#include "modules/localization/proto/imu.pb.h"
-#include "modules/localization/proto/localization.pb.h"
-#include "modules/perception/proto/perception_obstacle.pb.h"
-
 #include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/status/status.h"
 #include "modules/localization/lmd/predictor/predictor.h"
 #include "modules/localization/localization_base.h"
+#include "modules/localization/proto/gps.pb.h"
+#include "modules/localization/proto/imu.pb.h"
+#include "modules/localization/proto/localization.pb.h"
+#include "modules/perception/proto/perception_obstacle.pb.h"
 
 /**
  * @namespace apollo::localization
@@ -65,7 +65,7 @@ class LMDLocalization : public LocalizationBase {
     }
 
     bool Busy() const {
-      if (fut.valid()) return false;
+      if (!fut.valid()) return false;
       auto s = fut.wait_for(std::chrono::seconds::zero());
       return s != std::future_status::ready;
     }
@@ -107,6 +107,9 @@ class LMDLocalization : public LocalizationBase {
   PredictorHandler *imu_;
   PredictorHandler *perception_;
   PredictorHandler *output_;
+  std::list<CorrectedImu> imu_list_;
+  std::list<Gps> gps_list_;
+  std::list<apollo::perception::PerceptionObstacles> obstacles_list_;
 };
 
 }  // namespace localization

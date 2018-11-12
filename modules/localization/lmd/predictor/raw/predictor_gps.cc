@@ -14,6 +14,8 @@
  * limitations under the License.
  *****************************************************************************/
 
+#include <iomanip>
+
 #include "modules/localization/lmd/predictor/raw/predictor_gps.h"
 
 #include "modules/common/log.h"
@@ -40,7 +42,8 @@ bool PredictorGps::UpdateGps(const Gps& gps) {
 
   auto timestamp_sec = gps.header().timestamp_sec();
   if (!predicted_.Push(timestamp_sec, gps.localization())) {
-    AWARN << "Failed push pose to list, with timestamp[" << timestamp_sec
+    AWARN << std::setprecision(15)
+          << "Failed push pose to list, with timestamp[" << timestamp_sec
           << "]";
     return false;
   }
