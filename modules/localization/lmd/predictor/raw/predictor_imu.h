@@ -45,10 +45,10 @@ class PredictorImu : public Predictor {
 
   /**
    * @brief Update poses from imu.
-   * @param gps The message from imu.
+   * @param imu The message from imu.
    * @return True if success; false if not needed.
    */
-  bool UpdateImu(const CorrectedImu &gps);
+  bool UpdateImu(const CorrectedImu &imu);
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the

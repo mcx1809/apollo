@@ -22,15 +22,9 @@
 #ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
 #define MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
 
+#include <functional>
 #include <vector>
 
-#include "modules/perception/proto/perception_obstacle.pb.h"
-
-#include "modules/localization/lmd/common/tm_list.h"
-#include "modules/localization/lmd/predictor/perception/lm_provider.h"
-#include "modules/localization/lmd/predictor/perception/lm_sampler.h"
-#include "modules/localization/lmd/predictor/perception/pc_map.h"
-#include "modules/localization/lmd/predictor/perception/pc_registrator.h"
 #include "modules/localization/lmd/predictor/predictor.h"
 
 /**
@@ -41,23 +35,17 @@ namespace apollo {
 namespace localization {
 
 /**
- * @class PredictorPerception
+ * @class PredictorOutput
  *
  * @brief  Implementation of predictor.
  */
-class PredictorPerception : public Predictor {
+class PredictorOutput : public Predictor {
  public:
-  explicit PredictorPerception(double memory_cycle_sec);
-  virtual ~PredictorPerception();
-
-  /**
-   * @brief Update lane markers from perception.
-   * @param timestamp_sec The timestamp of lane markers.
-   * @param lane_markers The lane markers.
-   * @return True if success; false if not needed.
-   */
-  bool UpdateLaneMarkers(double timestamp_sec,
-                         const apollo::perception::LaneMarkers &lane_markers);
+  explicit PredictorOutput(
+      double memory_cycle_sec,
+      const std::function<apollo::common::Status(const LocalizationEstimate &)>
+          &publish_loc_func);
+  virtual ~PredictorOutput();
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the
@@ -74,12 +62,16 @@ class PredictorPerception : public Predictor {
   apollo::common::Status Update() override;
 
  private:
-  LMSampler lm_sampler_;
-  LMProvider lm_provider_;
-  PCMap pc_map_;
-  PCRegistrator pc_registrator_;
+  apollo::common::Status PublishLatestLocalization();
+  void PrintPoseError(const Pose &pose, double timestamp_sec);
 
-  TimeMarkedList<std::vector<PCSourcePoint>> lane_markers_samples_;
+  bool PredictByImu(const Pose &old_pose, double old_timestamp_sec,
+                    double new_timestamp_sec, Pose *new_pose);
+
+ private:
+  const std::vector<double> map_offset_;
+  std::function<apollo::common::Status(const LocalizationEstimate &)>
+      publish_loc_func_;
 };
 
 }  // namespace localization

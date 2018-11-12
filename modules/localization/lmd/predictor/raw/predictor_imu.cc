@@ -25,8 +25,8 @@ using apollo::common::Status;
 
 PredictorImu::PredictorImu(double memory_cycle_sec)
     : Predictor(memory_cycle_sec) {
-  name_ = kPredictorImu;
-  on_adapter_thread = true;
+  name_ = kPredictorImuName;
+  on_adapter_thread_ = true;
 }
 
 PredictorImu::~PredictorImu() {}

@@ -22,7 +22,10 @@ cc_library(
         "//modules/localization:localization_base",
         "//modules/localization/common:localization_common",
         "//modules/localization/lmd/predictor:localization_lmd_predictor",
+        "//modules/localization/lmd/predictor/output:localization_lmd_predictor_output",
         "//modules/localization/lmd/predictor/perception:localization_lmd_predictor_perception",
+        "//modules/localization/lmd/predictor/raw:localization_lmd_predictor_raw_gps",
+        "//modules/localization/lmd/predictor/raw:localization_lmd_predictor_raw_imu",
         "//modules/localization/proto:localization_config_proto",
         "//modules/localization/proto:localization_proto",
         "//modules/localization/proto:odometry_lane_marker_proto",
@@ -39,10 +42,10 @@ cc_test(
     ],
     data = ["//modules/localization:localization_testdata"],
     deps = [
+        ":lmd_localization",
         "//modules/common:log",
         "//modules/common/time",
         "//modules/common/util",
-        "//modules/localization/lmd:lmd_localization",
         "@gtest//:main",
     ],
 )

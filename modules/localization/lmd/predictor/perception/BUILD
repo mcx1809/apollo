@@ -23,6 +23,7 @@ cc_library(
         "//modules/common/math",
         "//modules/common/proto:common_proto",
         "//modules/common/status",
+        "//modules/localization/common:localization_common",
         "//modules/localization/lmd/common:localization_lmd_common",
         "//modules/localization/lmd/predictor:localization_lmd_predictor",
         "//modules/localization/proto:localization_proto",
@@ -44,9 +45,7 @@ cc_test(
     ],
     data = ["//modules/localization:localization_testdata"],
     deps = [
-        "//modules/common/time",
-        "//modules/common/util",
-        "//modules/localization/lmd:localization_lmd_predictor_perception",
+        ":localization_lmd_predictor_perception",
         "@gtest//:main",
     ],
 )

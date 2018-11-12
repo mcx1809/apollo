@@ -25,7 +25,7 @@ cc_test(
         "tm_list_test.cc",
     ],
     deps = [
-        "//modules/localization/lmd/common:localization_lmd_common",
+        ":localization_lmd_common",
         "@gtest//:main",
     ],
 )

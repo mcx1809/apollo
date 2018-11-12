@@ -16,17 +16,14 @@
 
 #include "modules/localization/lmd/lmd_localization.h"
 
-#include <algorithm>
-
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/log.h"
-#include "modules/common/math/euler_angles_zxy.h"
-#include "modules/common/math/math_utils.h"
-#include "modules/common/math/quaternion.h"
-#include "modules/common/time/time.h"
 #include "modules/common/util/thread_pool.h"
 #include "modules/localization/common/localization_gflags.h"
+#include "modules/localization/lmd/predictor/output/predictor.h"
 #include "modules/localization/lmd/predictor/perception/predictor.h"
+#include "modules/localization/lmd/predictor/raw/predictor_gps.h"
+#include "modules/localization/lmd/predictor/raw/predictor_imu.h"
 
 namespace apollo {
 namespace localization {
@@ -48,16 +45,29 @@ constexpr int kDefaultThreadPoolSize = 2;
 }  // namespace
 
 LMDLocalization::LMDLocalization()
-    : monitor_logger_(MonitorMessageItem::LOCALIZATION),
-      map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z} {}
+    : monitor_logger_(MonitorMessageItem::LOCALIZATION) {}
 
 LMDLocalization::~LMDLocalization() {}
 
 Status LMDLocalization::Start() {
   // initialize predictors
-  auto *predictor = new PredictorPerception(kDefaultMemoryCycle);
+  Predictor *predictor = new PredictorGps(kDefaultMemoryCycle);
+  predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
+  gps_ = &predictors_[predictor->Name()];
+  predictor = new PredictorImu(kDefaultMemoryCycle);
+  predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
+  imu_ = &predictors_[predictor->Name()];
+  predictor = new PredictorPerception(kDefaultMemoryCycle);
   predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
   perception_ = &predictors_[predictor->Name()];
+  predictor = new PredictorOutput(
+      kDefaultMemoryCycle, [&](const LocalizationEstimate &localization) {
+        AdapterManager::PublishLocalization(localization);
+        PublishPoseBroadcastTF(localization);
+        return Status::OK();
+      });
+  predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
+  output_ = &predictors_[predictor->Name()];
 
   // check predictors' dep
   for (const auto &p : predictors_) {
@@ -101,13 +111,41 @@ Status LMDLocalization::Stop() {
 }
 
 void LMDLocalization::OnImu(const CorrectedImu &imu) {
-  // take a snapshot of the current received messages
-  AdapterManager::Observe();
+  if (!imu_->Busy()) {
+    // take a snapshot of the current received messages
+    AdapterManager::Observe();
+
+    // update messages
+    auto *adapter = AdapterManager::GetImu();
+    for (const auto &msg : *adapter) {
+      auto *predictor = static_cast<PredictorImu *>(imu_->predictor.get());
+      if (!predictor->UpdateImu(*msg)) {
+        break;
+      }
+    }
+
+    // predicting
+    Predicting();
+  }
 }
 
 void LMDLocalization::OnGps(const Gps &gps) {
-  // take a snapshot of the current received messages
-  AdapterManager::Observe();
+  if (!gps_->Busy()) {
+    // take a snapshot of the current received messages
+    AdapterManager::Observe();
+
+    // update messages
+    auto *adapter = AdapterManager::GetGps();
+    for (const auto &msg : *adapter) {
+      auto *predictor = static_cast<PredictorGps *>(gps_->predictor.get());
+      if (!predictor->UpdateGps(*msg)) {
+        break;
+      }
+    }
+
+    // predicting
+    Predicting();
+  }
 }
 
 void LMDLocalization::OnChassis(const Chassis &chassis) {
@@ -189,8 +227,10 @@ void LMDLocalization::Predicting() {
             ph.predictor->Update();
           } else {
             auto predictor = ph.predictor;
-            ph.fut = ThreadPool::pool()->push(
-                [=](int) mutable -> Status { return predictor->Update(); });
+            ph.fut =
+                ThreadPool::pool()->push([=](int thread_id) mutable -> Status {
+                  return predictor->Update();
+                });
           }
         }
       }

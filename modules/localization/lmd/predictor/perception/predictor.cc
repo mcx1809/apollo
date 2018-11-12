@@ -59,7 +59,8 @@ bool PredictorPerception::UpdateLaneMarkers(double timestamp_sec,
 
 bool PredictorPerception::Updateable() const {
   auto output_it = dep_predicteds_.find(kPredictorOutputName);
-  return predicted_.Older(lane_markers_samples_) && !output_it->second.empty();
+  return !output_it->second.empty() && !lane_markers_samples_.empty() &&
+         (predicted_.Older(lane_markers_samples_) || predicted_.empty());
 }
 
 Status PredictorPerception::Update() {

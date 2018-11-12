@@ -25,6 +25,7 @@ namespace localization {
 
 using apollo::common::PointENU;
 using apollo::perception::LaneMarker;
+using apollo::perception::LaneMarkers;
 
 namespace {
 constexpr int kPointsNumInsertToMap = 240;

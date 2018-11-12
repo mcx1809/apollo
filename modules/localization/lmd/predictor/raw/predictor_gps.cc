@@ -25,8 +25,8 @@ using apollo::common::Status;
 
 PredictorGps::PredictorGps(double memory_cycle_sec)
     : Predictor(memory_cycle_sec) {
-  name_ = kPredictorGps;
-  on_adapter_thread = true;
+  name_ = kPredictorGpsName;
+  on_adapter_thread_ = true;
 }
 
 PredictorGps::~PredictorGps() {}

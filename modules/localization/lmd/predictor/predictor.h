@@ -38,8 +38,8 @@ namespace apollo {
 namespace localization {
 
 constexpr char kPredictorOutputName[] = "output";
-constexpr char kPredictorImu[] = "imu";
-constexpr char kPredictorGps[] = "gps";
+constexpr char kPredictorImuName[] = "imu";
+constexpr char kPredictorGpsName[] = "gps";
 constexpr char kPredictorPerceptionName[] = "perception";
 
 /**
@@ -87,26 +87,30 @@ class Predictor {
    */
   const PoseList& Predicted() const { return predicted_; }
 
-  bool UpdatingOnAdapterThread() const { return on_adapter_thread; }
+  /**
+   * @brief Is predicted running on adapter's thread.
+   * @return True if yes; no otherwise.
+   */
+  bool UpdatingOnAdapterThread() const { return on_adapter_thread_; }
 
   /**
    * @brief Is predicted list updateable.
    * @return True if yes; no otherwise.
    */
-  virtual bool Updateable() const;
+  virtual bool Updateable() const = 0;
 
   /**
    * @brief Predict a new pose and add it to predicted list.
    * @return Status::OK() if success; error otherwise.
    */
-  virtual apollo::common::Status Update();
+  virtual apollo::common::Status Update() = 0;
 
  protected:
   std::string name_;
 
   std::map<std::string, PoseList> dep_predicteds_;
   PoseList predicted_;
-  bool on_adapter_thread = false;
+  bool on_adapter_thread_ = false;
 };
 
 }  // namespace localization
