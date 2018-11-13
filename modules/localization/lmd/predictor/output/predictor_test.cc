@@ -23,14 +23,20 @@ namespace localization {
 
 using apollo::common::Status;
 
-class PredictorOutputTest : public ::testing::Test {};
+class PredictorOutputTest : public ::testing::Test {
+ public:
+  PredictorOutputTest()
+      : predictor_(10.0, [&](const LocalizationEstimate& localization) {
+          return Status::OK();
+        }) {}
 
-TEST_F(PredictorOutputTest, PredictByImu) {
-  PredictorOutput predictor(
-      10.0,
-      [&](const LocalizationEstimate& localization) { return Status::OK(); });
+ protected:
+  PredictorOutput predictor_;
+};
 
-  auto& imu = predictor.dep_predicteds_[kPredictorImuName];
+TEST_F(PredictorOutputTest, PredictByImu1) {
+  auto& imu = predictor_.dep_predicteds_[kPredictorImuName];
+  imu.clear();
   Pose imu_pose;
   imu_pose.mutable_linear_acceleration()->set_x(1.0);
   imu_pose.mutable_linear_acceleration()->set_y(1.0);
@@ -39,6 +45,10 @@ TEST_F(PredictorOutputTest, PredictByImu) {
   imu_pose.mutable_angular_velocity()->set_y(0.0);
   imu_pose.mutable_angular_velocity()->set_z(0.0);
   imu.Push(0.0, imu_pose);
+  imu_pose.mutable_linear_acceleration()->set_x(0.5);
+  imu_pose.mutable_linear_acceleration()->set_y(0.5);
+  imu_pose.mutable_linear_acceleration()->set_z(0.0);
+  imu.Push(0.5, imu_pose);
   imu.Push(3.0, imu_pose);
 
   Pose old_pose;
@@ -54,7 +64,51 @@ TEST_F(PredictorOutputTest, PredictByImu) {
   old_pose.mutable_linear_velocity()->set_z(0.0);
 
   Pose new_pose;
-  EXPECT_TRUE(predictor.PredictByImu(0.0, old_pose, 1.0, &new_pose));
+  EXPECT_TRUE(predictor_.PredictByImu(0.0, old_pose, 1.0, &new_pose));
+  EXPECT_NEAR(0.354, new_pose.position().x(), 1e-3);
+  EXPECT_NEAR(0.354, new_pose.position().y(), 1e-3);
+  EXPECT_NEAR(0.0, new_pose.position().z(), 1e-3);
+  EXPECT_NEAR(0.625, new_pose.linear_velocity().x(), 1e-3);
+  EXPECT_NEAR(0.625, new_pose.linear_velocity().y(), 1e-3);
+  EXPECT_NEAR(0.0, new_pose.linear_velocity().z(), 1e-3);
+}
+
+TEST_F(PredictorOutputTest, PredictByImu2) {
+  auto& imu = predictor_.dep_predicteds_[kPredictorImuName];
+  imu.clear();
+  Pose imu_pose;
+  imu_pose.mutable_linear_acceleration()->set_x(1.0);
+  imu_pose.mutable_linear_acceleration()->set_y(1.0);
+  imu_pose.mutable_linear_acceleration()->set_z(0.0);
+  imu_pose.mutable_angular_velocity()->set_x(0.0);
+  imu_pose.mutable_angular_velocity()->set_y(0.0);
+  imu_pose.mutable_angular_velocity()->set_z(0.0);
+  imu.Push(0.0, imu_pose);
+  imu_pose.mutable_linear_acceleration()->set_x(1.0);
+  imu_pose.mutable_linear_acceleration()->set_y(1.0);
+  imu_pose.mutable_linear_acceleration()->set_z(0.0);
+  imu.Push(1.0, imu_pose);
+
+  Pose old_pose;
+  old_pose.mutable_position()->set_x(0.0);
+  old_pose.mutable_position()->set_y(0.0);
+  old_pose.mutable_position()->set_z(0.0);
+  old_pose.mutable_orientation()->set_qw(1.0);
+  old_pose.mutable_orientation()->set_qx(0.0);
+  old_pose.mutable_orientation()->set_qy(0.0);
+  old_pose.mutable_orientation()->set_qz(0.0);
+  old_pose.mutable_linear_velocity()->set_x(0.0);
+  old_pose.mutable_linear_velocity()->set_y(0.0);
+  old_pose.mutable_linear_velocity()->set_z(0.0);
+
+  Pose new_pose;
+  EXPECT_TRUE(predictor_.PredictByImu(0.0, old_pose, 1.0, &new_pose));
+  EXPECT_NEAR(0.5, new_pose.position().x(), 1e-3);
+  EXPECT_NEAR(0.5, new_pose.position().y(), 1e-3);
+  EXPECT_NEAR(0.0, new_pose.position().z(), 1e-3);
+  EXPECT_NEAR(1.0, new_pose.linear_velocity().x(), 1e-3);
+  EXPECT_NEAR(1.0, new_pose.linear_velocity().y(), 1e-3);
+  EXPECT_NEAR(0.0, new_pose.linear_velocity().z(), 1e-3);
 }
 
 }  // namespace localization

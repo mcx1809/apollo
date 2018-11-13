@@ -39,7 +39,7 @@ PredictorPerception::PredictorPerception(double memory_cycle_sec)
       pc_registrator_(&pc_map_),
       lane_markers_samples_(memory_cycle_sec) {
   name_ = kPredictorPerceptionName;
-  dep_predicteds_[kPredictorOutputName];
+  dep_predicteds_.emplace(kPredictorOutputName, PoseList(memory_cycle_sec));
 }
 
 PredictorPerception::~PredictorPerception() {}

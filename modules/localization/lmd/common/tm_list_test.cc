@@ -79,14 +79,14 @@ TEST(TimeMarkedListTest, Newer) {
 }
 
 TEST(TimeMarkedListTest, RangeOf) {
-  TimeMarkedList<int> tm(100.0);
+  TimeMarkedList<double> tm(100.0);
 
   auto p = tm.RangeOf(10.0);
   EXPECT_EQ(tm.end(), p.first);
   EXPECT_EQ(tm.end(), p.second);
 
-  for (auto i = 5; i <= 20; ++i) {
-    tm.Push(static_cast<double>(i), i);
+  for (double i = 5.0; i <= 20.0; i += 1.0) {
+    tm.Push(i, i);
   }
 
   p = tm.RangeOf(10.5);
@@ -104,6 +104,11 @@ TEST(TimeMarkedListTest, RangeOf) {
   EXPECT_NE(tm.end(), p.first);
   EXPECT_EQ(tm.end(), p.second);
   EXPECT_NEAR(20.0, p.first->first, 1e-10);
+
+  p = tm.RangeOf(5.0);
+  EXPECT_EQ(tm.end(), p.first);
+  EXPECT_NE(tm.end(), p.second);
+  EXPECT_NEAR(5.0, p.second->first, 1e-10);
 }
 
 TEST(TimeMarkedListTest, Nearest) {

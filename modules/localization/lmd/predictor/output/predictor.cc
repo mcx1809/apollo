@@ -103,9 +103,9 @@ PredictorOutput::PredictorOutput(
       map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z},
       publish_loc_func_(publish_loc_func) {
   name_ = kPredictorOutputName;
-  dep_predicteds_[kPredictorGpsName];
-  dep_predicteds_[kPredictorImuName];
-  dep_predicteds_[kPredictorPerceptionName];
+  dep_predicteds_.emplace(kPredictorGpsName, PoseList(memory_cycle_sec));
+  dep_predicteds_.emplace(kPredictorImuName, PoseList(memory_cycle_sec));
+  dep_predicteds_.emplace(kPredictorPerceptionName, PoseList(memory_cycle_sec));
   on_adapter_thread_ = true;
 }
 
@@ -134,7 +134,6 @@ Status PredictorOutput::Update() {
 
     // fill pose from imu
     FillPoseFromImu(imu_pose, &pose);
-
     // push pose to list
     predicted_.Push(timestamp_sec, pose);
   } else {
@@ -145,7 +144,7 @@ Status PredictorOutput::Update() {
     // base pose for prediction
     double base_timestamp_sec;
     Pose base_pose;
-    const auto& perception = dep_predicteds_[kPredictorPerceptionName];
+    /*const auto& perception = dep_predicteds_[kPredictorPerceptionName];
     auto perception_base_pose_it = perception.RangeOf(timestamp_sec).first;
     if (perception_base_pose_it != perception.end()) {
       auto perception_base_timestamp_sec = perception_base_pose_it->first;
@@ -172,12 +171,13 @@ Status PredictorOutput::Update() {
     } else {
       base_timestamp_sec = predicted_.Latest()->first;
       base_pose = predicted_.Latest()->second;
-    }
+    }*/
+    base_timestamp_sec = predicted_.Latest()->first;
+    base_pose = predicted_.Latest()->second;
 
     // predict
     Pose pose;
     PredictByImu(base_timestamp_sec, base_pose, timestamp_sec, &pose);
-
     // push pose to list
     predicted_.Push(timestamp_sec, pose);
   }
@@ -302,7 +302,7 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
       imu_pose_1 = imu_pose;
     }
 
-    if (new_timestamp_sec >= timestamp_sec_1) {
+    if (new_timestamp_sec <= timestamp_sec_1) {
       finished = true;
     }
 

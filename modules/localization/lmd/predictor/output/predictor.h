@@ -76,7 +76,8 @@ class PredictorOutput : public Predictor {
       publish_loc_func_;
   int print_error_ctl_ = 0;
 
-  FRIEND_TEST(PredictorOutputTest, PredictByImu);
+  FRIEND_TEST(PredictorOutputTest, PredictByImu1);
+  FRIEND_TEST(PredictorOutputTest, PredictByImu2);
 };
 
 }  // namespace localization
