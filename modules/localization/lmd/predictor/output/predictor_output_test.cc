@@ -14,7 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/predictor/output/predictor.h"
+#include "modules/localization/lmd/predictor/output/predictor_output.h"
 
 #include "gtest/gtest.h"
 
@@ -26,9 +26,7 @@ using apollo::common::Status;
 class PredictorOutputTest : public ::testing::Test {
  public:
   PredictorOutputTest()
-      : predictor_(10.0, [&](const LocalizationEstimate& localization) {
-          return Status::OK();
-        }) {}
+      : predictor_(10.0, [&](double, const Pose&) { return Status::OK(); }) {}
 
  protected:
   PredictorOutput predictor_;

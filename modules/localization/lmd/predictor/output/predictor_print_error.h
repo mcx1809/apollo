@@ -15,17 +15,12 @@
  *****************************************************************************/
 
 /**
- * @file predictor.h
- * @brief The class of PredictorOutput.
+ * @file predictor_print_error.h
+ * @brief The class of PredictorPrintError.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
-#define MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
-
-#include <functional>
-#include <vector>
-
-#include "gtest/gtest.h"
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_PRINT_ERROR_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_PRINT_ERROR_H_
 
 #include "modules/localization/lmd/predictor/predictor.h"
 
@@ -37,17 +32,14 @@ namespace apollo {
 namespace localization {
 
 /**
- * @class PredictorOutput
+ * @class PredictorPrintError
  *
  * @brief  Implementation of predictor.
  */
-class PredictorOutput : public Predictor {
+class PredictorPrintError : public Predictor {
  public:
-  explicit PredictorOutput(
-      double memory_cycle_sec,
-      const std::function<apollo::common::Status(const LocalizationEstimate &)>
-          &publish_loc_func);
-  virtual ~PredictorOutput();
+  explicit PredictorPrintError(double memory_cycle_sec);
+  virtual ~PredictorPrintError();
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the
@@ -64,23 +56,15 @@ class PredictorOutput : public Predictor {
   apollo::common::Status Update() override;
 
  private:
-  apollo::common::Status PublishLatestLocalization();
+  double DepsTimestamp() const;
   void PrintPoseError(double timestamp_sec, const Pose &pose);
 
-  bool PredictByImu(double old_timestamp_sec, const Pose &old_pose,
-                    double new_timestamp_sec, Pose *new_pose);
-
  private:
-  const std::vector<double> map_offset_;
-  std::function<apollo::common::Status(const LocalizationEstimate &)>
-      publish_loc_func_;
-  int print_error_ctl_ = 0;
-
-  FRIEND_TEST(PredictorOutputTest, PredictByImu1);
-  FRIEND_TEST(PredictorOutputTest, PredictByImu2);
+  bool has_latest_timestamp_sec_ = false;
+  double latest_timestamp_sec_;
 };
 
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_PRINT_ERROR_H_

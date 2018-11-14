@@ -5,15 +5,16 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "localization_lmd_predictor_output",
     srcs = [
-        "predictor.cc",
+        "predictor_output.cc",
+        "predictor_print_error.cc",
     ],
     hdrs = [
-        "predictor.h",
+        "predictor_output.h",
+        "predictor_print_error.h",
     ],
     deps = [
         "//modules/common:log",
         "//modules/common/math",
-        "//modules/common/adapters:adapter_manager",
         "//modules/common/proto:common_proto",
         "//modules/common/status",
         "//modules/localization/common:localization_common",
@@ -28,7 +29,7 @@ cc_test(
     name = "localization_lmd_predictor_output_test",
     size = "small",
     srcs = [
-        "predictor_test.cc"
+        "predictor_output_test.cc"
     ],
     deps = [
         ":localization_lmd_predictor_output",

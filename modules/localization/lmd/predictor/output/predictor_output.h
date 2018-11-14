@@ -15,14 +15,16 @@
  *****************************************************************************/
 
 /**
- * @file predictor.h
- * @brief The class of PredictorImu.
+ * @file predictor_output.h
+ * @brief The class of PredictorOutput.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_IMU_H_
-#define MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_IMU_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_OUTPUT_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_OUTPUT_H_
 
-#include "modules/localization/proto/imu.pb.h"
+#include <functional>
+
+#include "gtest/gtest.h"
 
 #include "modules/localization/lmd/predictor/predictor.h"
 
@@ -34,21 +36,17 @@ namespace apollo {
 namespace localization {
 
 /**
- * @class PredictorImu
+ * @class PredictorOutput
  *
  * @brief  Implementation of predictor.
  */
-class PredictorImu : public Predictor {
+class PredictorOutput : public Predictor {
  public:
-  explicit PredictorImu(double memory_cycle_sec);
-  virtual ~PredictorImu();
-
-  /**
-   * @brief Update poses from imu.
-   * @param imu The message from imu.
-   * @return True if success; false if not needed.
-   */
-  bool UpdateImu(const CorrectedImu& imu);
+  explicit PredictorOutput(
+      double memory_cycle_sec,
+      const std::function<apollo::common::Status(double, const Pose &)>
+          &publish_loc_func);
+  virtual ~PredictorOutput();
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the
@@ -65,14 +63,17 @@ class PredictorImu : public Predictor {
   apollo::common::Status Update() override;
 
  private:
-  bool WindowFilter(double timestamp_sec);
+  bool PredictByImu(double old_timestamp_sec, const Pose &old_pose,
+                    double new_timestamp_sec, Pose *new_pose);
 
  private:
-  double latest_timestamp_sec_;
-  PoseList raw_imu_;
+  std::function<apollo::common::Status(double, const Pose &)> publish_loc_func_;
+
+  FRIEND_TEST(PredictorOutputTest, PredictByImu1);
+  FRIEND_TEST(PredictorOutputTest, PredictByImu2);
 };
 
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_IMU_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_OUTPUT_H_

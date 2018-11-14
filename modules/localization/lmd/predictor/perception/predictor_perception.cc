@@ -14,7 +14,9 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/localization/lmd/predictor/perception/predictor.h"
+#include "modules/localization/lmd/predictor/perception/predictor_perception.h"
+
+#include <algorithm>
 
 #include "modules/common/log.h"
 #include "modules/common/math/quaternion.h"
@@ -58,12 +60,15 @@ bool PredictorPerception::UpdateLaneMarkers(double timestamp_sec,
 }
 
 bool PredictorPerception::Updateable() const {
-  auto output_it = dep_predicteds_.find(kPredictorOutputName);
-  return !output_it->second.empty() && !lane_markers_samples_.empty() &&
-         (predicted_.Older(lane_markers_samples_) || predicted_.empty());
+  const auto& output = dep_predicteds_.find(kPredictorOutputName)->second;
+  return lane_markers_samples_.Older(output) &&
+         (predicted_.Older(lane_markers_samples_) || predicted_.empty()) &&
+         DepsTimestamp() > deps_timestamp_sec_;
 }
 
 Status PredictorPerception::Update() {
+  deps_timestamp_sec_ = DepsTimestamp();
+
   auto latest_sample_it = lane_markers_samples_.Latest();
   auto timestamp_sec = latest_sample_it->first;
   const auto& latest_sample = latest_sample_it->second;
@@ -110,6 +115,20 @@ Status PredictorPerception::Update() {
   predicted_.Push(timestamp_sec, pose);
 
   return Status::OK();
+}
+
+double PredictorPerception::DepsTimestamp() const {
+  double timestamp_sec = std::numeric_limits<double>::min();
+  auto sample_it = lane_markers_samples_.Latest();
+  if (sample_it != lane_markers_samples_.end()) {
+    timestamp_sec = std::max(sample_it->first, timestamp_sec);
+  }
+  const auto& output = dep_predicteds_.find(kPredictorOutputName)->second;
+  auto o_it = output.Latest();
+  if (o_it != output.end()) {
+    timestamp_sec = std::max(o_it->first, timestamp_sec);
+  }
+  return timestamp_sec;
 }
 
 }  // namespace localization

@@ -15,13 +15,14 @@
  *****************************************************************************/
 
 /**
- * @file predictor.h
+ * @file predictor_perception.h
  * @brief The class of PredictorPerception.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
-#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_PERCEPTION_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_PERCEPTION_H_
 
+#include <limits>
 #include <vector>
 
 #include "modules/perception/proto/perception_obstacle.pb.h"
@@ -74,15 +75,19 @@ class PredictorPerception : public Predictor {
   apollo::common::Status Update() override;
 
  private:
+  double DepsTimestamp() const;
+
+ private:
   LMSampler lm_sampler_;
   LMProvider lm_provider_;
   PCMap pc_map_;
   PCRegistrator pc_registrator_;
 
   TimeMarkedList<std::vector<PCSourcePoint>> lane_markers_samples_;
+  double deps_timestamp_sec_ = std::numeric_limits<double>::min();
 };
 
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_PERCEPTION_PREDICTOR_PERCEPTION_H_

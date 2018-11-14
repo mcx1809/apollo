@@ -19,9 +19,12 @@
 #include <cmath>
 
 #include "modules/common/log.h"
+#include "modules/common/math/quaternion.h"
 
 namespace apollo {
 namespace localization {
+
+using apollo::common::math::QuaternionToHeading;
 
 namespace {
 template <class T>
@@ -87,6 +90,20 @@ bool PoseList::FindMatchingPose(double timestamp_sec, Pose *pose) const {
   return true;
 }
 
+bool PoseList::FindNearestPose(double timestamp_sec, Pose *pose) const {
+  CHECK_NOTNULL(pose);
+
+  if (!FindMatchingPose(timestamp_sec, pose)) {
+    auto it = Nearest(timestamp_sec);
+    if (it == end()) {
+      return false;
+    }
+    pose->CopyFrom(it->second);
+  }
+
+  return true;
+}
+
 void PoseList::InterpolatePose(double timestamp_sec1, const Pose &pose1,
                                double timestamp_sec2, const Pose &pose2,
                                double timestamp_sec, Pose *pose) {
@@ -111,6 +128,9 @@ void PoseList::InterpolatePose(double timestamp_sec1, const Pose &pose1,
       auto val = InterpolateQuaternion(pose1.orientation(), pose2.orientation(),
                                        frac1);
       pose->mutable_orientation()->CopyFrom(val);
+      pose->set_heading(QuaternionToHeading(
+          pose->orientation().qw(), pose->orientation().qx(),
+          pose->orientation().qy(), pose->orientation().qz()));
     }
 
     if (pose1.has_linear_velocity() && pose2.has_linear_velocity()) {
@@ -137,20 +157,6 @@ void PoseList::InterpolatePose(double timestamp_sec1, const Pose &pose1,
       pose->mutable_euler_angles()->CopyFrom(val);
     }
   }
-}
-
-bool PoseList::FindNearestPose(double timestamp_sec, Pose *pose) const {
-  CHECK_NOTNULL(pose);
-
-  if (!FindMatchingPose(timestamp_sec, pose)) {
-    auto it = Nearest(timestamp_sec);
-    if (it == end()) {
-      return false;
-    }
-    pose->CopyFrom(it->second);
-  }
-
-  return true;
 }
 
 }  // namespace localization

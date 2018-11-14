@@ -26,7 +26,7 @@ namespace localization {
 using apollo::common::Status;
 
 PredictorImu::PredictorImu(double memory_cycle_sec)
-    : Predictor(memory_cycle_sec) {
+    : Predictor(memory_cycle_sec), raw_imu_(memory_cycle_sec) {
   name_ = kPredictorImuName;
   on_adapter_thread_ = true;
 }
@@ -41,14 +41,14 @@ bool PredictorImu::UpdateImu(const CorrectedImu& imu) {
   }
 
   auto timestamp_sec = imu.header().timestamp_sec();
-  if (!predicted_.Push(timestamp_sec, imu.imu())) {
+  if (!raw_imu_.Push(timestamp_sec, imu.imu())) {
     AWARN << std::setprecision(15)
           << "Failed push pose to list, with timestamp[" << timestamp_sec
           << "]";
     return false;
   }
 
-  return true;
+  return WindowFilter(timestamp_sec);
 }
 
 bool PredictorImu::Updateable() const {
@@ -61,6 +61,58 @@ Status PredictorImu::Update() {
     latest_timestamp_sec_ = latest->first;
   }
   return Status::OK();
+}
+
+bool PredictorImu::WindowFilter(double timestamp_sec) {
+  Pose pose;
+  pose.mutable_linear_acceleration()->set_x(0.0);
+  pose.mutable_linear_acceleration()->set_y(0.0);
+  pose.mutable_linear_acceleration()->set_z(0.0);
+  pose.mutable_angular_velocity()->set_x(0.0);
+  pose.mutable_angular_velocity()->set_y(0.0);
+  pose.mutable_angular_velocity()->set_z(0.0);
+
+  constexpr double kWindowSize = 0.20;
+  constexpr double kSamplingInterval = 0.01;
+  std::size_t count = 0;
+  for (auto t = timestamp_sec; t >= timestamp_sec - kWindowSize;
+       t -= kSamplingInterval) {
+    Pose sample;
+    raw_imu_.FindNearestPose(t, &sample);
+    pose.mutable_linear_acceleration()->set_x(pose.linear_acceleration().x() +
+                                              sample.linear_acceleration().x());
+    pose.mutable_linear_acceleration()->set_y(pose.linear_acceleration().y() +
+                                              sample.linear_acceleration().y());
+    pose.mutable_linear_acceleration()->set_z(pose.linear_acceleration().z() +
+                                              sample.linear_acceleration().z());
+    pose.mutable_angular_velocity()->set_x(pose.angular_velocity().x() +
+                                           sample.angular_velocity().x());
+    pose.mutable_angular_velocity()->set_y(pose.angular_velocity().y() +
+                                           sample.angular_velocity().y());
+    pose.mutable_angular_velocity()->set_z(pose.angular_velocity().z() +
+                                           sample.angular_velocity().z());
+
+    count++;
+  }
+
+  pose.mutable_linear_acceleration()->set_x(pose.linear_acceleration().x() /
+                                            count);
+  pose.mutable_linear_acceleration()->set_y(pose.linear_acceleration().y() /
+                                            count);
+  pose.mutable_linear_acceleration()->set_z(pose.linear_acceleration().z() /
+                                            count);
+  pose.mutable_angular_velocity()->set_x(pose.angular_velocity().x() / count);
+  pose.mutable_angular_velocity()->set_y(pose.angular_velocity().y() / count);
+  pose.mutable_angular_velocity()->set_z(pose.angular_velocity().z() / count);
+
+  if (!predicted_.Push(timestamp_sec, pose)) {
+    AWARN << std::setprecision(15)
+          << "Failed push pose to list, with timestamp[" << timestamp_sec
+          << "]";
+    return false;
+  }
+
+  return true;
 }
 
 }  // namespace localization

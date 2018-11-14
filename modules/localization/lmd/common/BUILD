@@ -13,6 +13,7 @@ cc_library(
     ],
     deps = [
         "//modules/common:log",
+        "//modules/common/math",
         "//modules/localization/proto:localization_proto",
     ],
 )

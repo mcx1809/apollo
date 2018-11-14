@@ -20,8 +20,9 @@
 #include "modules/common/log.h"
 #include "modules/common/util/thread_pool.h"
 #include "modules/localization/common/localization_gflags.h"
-#include "modules/localization/lmd/predictor/output/predictor.h"
-#include "modules/localization/lmd/predictor/perception/predictor.h"
+#include "modules/localization/lmd/predictor/output/predictor_output.h"
+#include "modules/localization/lmd/predictor/output/predictor_print_error.h"
+#include "modules/localization/lmd/predictor/perception/predictor_perception.h"
 #include "modules/localization/lmd/predictor/raw/predictor_gps.h"
 #include "modules/localization/lmd/predictor/raw/predictor_imu.h"
 
@@ -45,11 +46,32 @@ constexpr int kDefaultThreadPoolSize = 2;
 }  // namespace
 
 LMDLocalization::LMDLocalization()
-    : monitor_logger_(MonitorMessageItem::LOCALIZATION) {}
+    : monitor_logger_(MonitorMessageItem::LOCALIZATION),
+      map_offset_{FLAGS_map_offset_x, FLAGS_map_offset_y, FLAGS_map_offset_z} {}
 
 LMDLocalization::~LMDLocalization() {}
 
 Status LMDLocalization::Start() {
+  auto publish_func = [&](double timestamp_sec, const Pose &pose) {
+    // prepare localization message
+    LocalizationEstimate localization;
+    AdapterManager::FillLocalizationHeader(FLAGS_localization_module_name,
+                                           &localization);
+    localization.set_measurement_time(timestamp_sec);
+    localization.mutable_pose()->CopyFrom(pose);
+    localization.mutable_pose()->mutable_position()->set_x(pose.position().x() -
+                                                           map_offset_[0]);
+    localization.mutable_pose()->mutable_position()->set_y(pose.position().y() -
+                                                           map_offset_[1]);
+    localization.mutable_pose()->mutable_position()->set_z(pose.position().z() -
+                                                           map_offset_[2]);
+
+    // publish localization messages
+    AdapterManager::PublishLocalization(localization);
+    PublishPoseBroadcastTF(localization);
+    return Status::OK();
+  };
+
   // initialize predictors
   Predictor *predictor = new PredictorGps(kDefaultMemoryCycle);
   predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
@@ -60,14 +82,11 @@ Status LMDLocalization::Start() {
   predictor = new PredictorPerception(kDefaultMemoryCycle);
   predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
   perception_ = &predictors_[predictor->Name()];
-  predictor = new PredictorOutput(
-      kDefaultMemoryCycle, [&](const LocalizationEstimate &localization) {
-        AdapterManager::PublishLocalization(localization);
-        PublishPoseBroadcastTF(localization);
-        return Status::OK();
-      });
+  predictor = new PredictorOutput(kDefaultMemoryCycle, publish_func);
   predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
   output_ = &predictors_[predictor->Name()];
+  predictor = new PredictorPrintError(kDefaultMemoryCycle);
+  predictors_.emplace(predictor->Name(), PredictorHandler(predictor));
 
   // check predictors' dep
   for (const auto &p : predictors_) {

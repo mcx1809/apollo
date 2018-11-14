@@ -28,6 +28,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "ros/include/ros/ros.h"
 
@@ -101,6 +102,7 @@ class LMDLocalization : public LocalizationBase {
  private:
   ros::Timer timer_;
   apollo::common::monitor::MonitorLogger monitor_logger_;
+  const std::vector<double> map_offset_;
 
   std::map<std::string, PredictorHandler> predictors_;
   PredictorHandler *gps_;

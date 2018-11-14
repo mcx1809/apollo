@@ -9,14 +9,14 @@ cc_library(
         "lm_sampler.cc",
         "pc_map.cc",
         "pc_registrator.cc",
-        "predictor.cc",
+        "predictor_perception.cc",
     ],
     hdrs = [
         "lm_provider.h",
         "lm_sampler.h",
         "pc_map.h",
         "pc_registrator.h",
-        "predictor.h",
+        "predictor_perception.h",
     ],
     deps = [
         "//modules/common:log",
@@ -41,7 +41,7 @@ cc_test(
         "lm_sampler_test.cc",
         "pc_map_test.cc",
         "pc_registrator_test.cc",
-        "predictor_test.cc"
+        "predictor_perception_test.cc"
     ],
     data = ["//modules/localization:localization_testdata"],
     deps = [
