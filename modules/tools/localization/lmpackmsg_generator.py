@@ -101,11 +101,11 @@ def cal_proportion(source_tuple, obs_index):
         a = source_tuple[1][odo_index].header.timestamp_sec
         b = source_tuple[1][odo_index + 1].header.timestamp_sec
         if(a < c and c < b):
-            return ((c - a)/(b - a), odo_index)
+            return ((b - c)/(b - a), odo_index)
         elif(c == a):
-            return (0, odo_index)
-        elif (c == b):
             return (1, odo_index)
+        elif (c == b):
+            return (0, odo_index)
         else:
             continue
     return(1, odo_index)

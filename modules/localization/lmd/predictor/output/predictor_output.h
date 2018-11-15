@@ -23,11 +23,14 @@
 #define MODULES_LOCALIZATION_LMD_PREDICTOR_OUTPUT_PREDICTOR_OUTPUT_H_
 
 #include <functional>
+#include <vector>
 
 #include "gtest/gtest.h"
 
-#include "modules/localization/lmd/predictor/predictor.h"
+#include "modules/perception/proto/perception_obstacle.pb.h"
 
+#include "modules/localization/lmd/predictor/output/lmd_particle_filter.h"
+#include "modules/localization/lmd/predictor/predictor.h"
 /**
  * @namespace apollo::localization
  * @brief apollo::localization
@@ -62,13 +65,27 @@ class PredictorOutput : public Predictor {
    */
   apollo::common::Status Update() override;
 
+  /**
+   * @brief Update lane markers from perception.
+   * @param timestamp_sec The timestamp of lane markers.
+   * @param lane_markers The lane markers.
+   * @return True if success; false if not needed.
+   */
+  bool UpdateLaneMarkers(double timestamp_sec,
+                         const apollo::perception::LaneMarkers &lane_markers);
+
  private:
   bool PredictByImu(double old_timestamp_sec, const Pose &old_pose,
                     double new_timestamp_sec, Pose *new_pose);
 
- private:
-  std::function<apollo::common::Status(double, const Pose &)> publish_loc_func_;
+  bool PredictByParticleFiler(double old_timestamp_sec, const Pose &old_pose,
+                              double new_timestamp_sec, Pose *new_pose);
 
+ private:
+  apollo::perception::LaneMarkers lane_markers_;
+  double lane_markers_time_;
+  std::function<apollo::common::Status(double, const Pose &)> publish_loc_func_;
+  ParticleFilter pc_filter_;
   FRIEND_TEST(PredictorOutputTest, PredictByImu1);
   FRIEND_TEST(PredictorOutputTest, PredictByImu2);
 };
