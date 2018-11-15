@@ -112,6 +112,7 @@ class LMDLocalization : public LocalizationBase {
   std::list<CorrectedImu> imu_list_;
   std::list<Gps> gps_list_;
   std::list<apollo::perception::PerceptionObstacles> obstacles_list_;
+  std::list<apollo::perception::PerceptionObstacles> obstacles_list1_;
 };
 
 }  // namespace localization

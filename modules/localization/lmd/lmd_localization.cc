@@ -167,12 +167,11 @@ void LMDLocalization::OnChassis(const Chassis &chassis) {}
 
 void LMDLocalization::OnPerceptionObstacles(
     const PerceptionObstacles &obstacles) {
+  // for perception
   if (!perception_->Busy()) {
     // update messages
     auto *predictor =
         static_cast<PredictorPerception *>(perception_->predictor.get());
-    auto *predictor_out =
-        static_cast<PredictorOutput *>(perception_->predictor.get());
     for (const auto &obstacles : obstacles_list_) {
       if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
           !obstacles.has_lane_marker()) {
@@ -181,8 +180,6 @@ void LMDLocalization::OnPerceptionObstacles(
       }
       predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
                                    obstacles.lane_marker());
-      predictor_out->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
-                                       obstacles.lane_marker());
     }
     obstacles_list_.clear();
     if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
@@ -191,15 +188,38 @@ void LMDLocalization::OnPerceptionObstacles(
     } else {
       predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
                                    obstacles.lane_marker());
-      predictor_out->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
-                                       obstacles.lane_marker());
     }
-
-    // predicting
-    Predicting();
   } else {
     obstacles_list_.emplace_back(obstacles);
   }
+
+  // for output
+  if (!output_->Busy()) {
+    // update messages
+    auto *predictor = static_cast<PredictorOutput *>(output_->predictor.get());
+    for (const auto &obstacles : obstacles_list1_) {
+      if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
+          !obstacles.has_lane_marker()) {
+        AERROR << "Message has not some feilds";
+        continue;
+      }
+      predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
+                                   obstacles.lane_marker());
+    }
+    obstacles_list1_.clear();
+    if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
+        !obstacles.has_lane_marker()) {
+      AERROR << "Message has not some feilds";
+    } else {
+      predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
+                                   obstacles.lane_marker());
+    }
+  } else {
+    obstacles_list1_.emplace_back(obstacles);
+  }
+
+  // predicting
+  Predicting();
 }
 
 void LMDLocalization::OnTimer(const ros::TimerEvent &event) {
