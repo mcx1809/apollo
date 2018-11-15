@@ -41,7 +41,7 @@ using apollo::common::util::ThreadPool;
 using apollo::perception::PerceptionObstacles;
 
 namespace {
-constexpr double kDefaultMemoryCycle = 2.0;
+constexpr double kDefaultMemoryCycle = 1.0;
 constexpr int kDefaultThreadPoolSize = 2;
 }  // namespace
 
