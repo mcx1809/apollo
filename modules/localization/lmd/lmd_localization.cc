@@ -171,6 +171,8 @@ void LMDLocalization::OnPerceptionObstacles(
     // update messages
     auto *predictor =
         static_cast<PredictorPerception *>(perception_->predictor.get());
+    auto *predictor_out =
+        static_cast<PredictorOutput *>(perception_->predictor.get());
     for (const auto &obstacles : obstacles_list_) {
       if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
           !obstacles.has_lane_marker()) {
@@ -179,6 +181,8 @@ void LMDLocalization::OnPerceptionObstacles(
       }
       predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
                                    obstacles.lane_marker());
+      predictor_out->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
+                                       obstacles.lane_marker());
     }
     obstacles_list_.clear();
     if (!obstacles.has_header() || !obstacles.header().has_timestamp_sec() ||
@@ -187,6 +191,8 @@ void LMDLocalization::OnPerceptionObstacles(
     } else {
       predictor->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
                                    obstacles.lane_marker());
+      predictor_out->UpdateLaneMarkers(obstacles.header().timestamp_sec(),
+                                       obstacles.lane_marker());
     }
 
     // predicting
