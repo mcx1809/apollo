@@ -33,13 +33,13 @@ using apollo::common::math::RotateAxis;
 using apollo::common::math::Vec2d;
 
 namespace {
-constexpr double kHeadingOptRange = M_PI * 0.6;
+constexpr double kHeadingOptRange = M_PI * 0.3;
 constexpr double kXOptRange = 4.0;
 constexpr double kYOptRange = 4.0;
-constexpr int kHeadingOptRatio = 5;
-constexpr int kXOptRatio = 5;
-constexpr int kYOptRatio = 5;
-constexpr int kOptIterNum = 4;
+constexpr int kHeadingOptRatio = 4;
+constexpr int kXOptRatio = 4;
+constexpr int kYOptRatio = 4;
+constexpr int kOptIterNum = 5;
 constexpr double kNotFoundError = 1000.0;
 constexpr double kMovingXCostRatio = 2.0;
 constexpr double kMovingYCostRatio = 0.2;

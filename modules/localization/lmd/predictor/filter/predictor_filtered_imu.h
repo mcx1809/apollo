@@ -15,15 +15,16 @@
  *****************************************************************************/
 
 /**
- * @file predictor_gps.h
- * @brief The class of PredictorGps.
+ * @file predictor_filtered_imu.h
+ * @brief The class of PredictorFilteredImu.
  */
 
-#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_GPS_H_
-#define MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_GPS_H_
+#ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_FILTER_PREDICTOR_FILTERED_IMU_H_
+#define MODULES_LOCALIZATION_LMD_PREDICTOR_FILTER_PREDICTOR_FILTERED_IMU_H_
 
-#include "modules/localization/proto/gps.pb.h"
+#include "modules/canbus/proto/chassis.pb.h"
 
+#include "modules/localization/lmd/common/tm_list.h"
 #include "modules/localization/lmd/predictor/predictor.h"
 
 /**
@@ -38,17 +39,17 @@ namespace localization {
  *
  * @brief  Implementation of predictor.
  */
-class PredictorGps : public Predictor {
+class PredictorFilteredImu : public Predictor {
  public:
-  explicit PredictorGps(double memory_cycle_sec);
-  virtual ~PredictorGps();
+  explicit PredictorFilteredImu(double memory_cycle_sec);
+  virtual ~PredictorFilteredImu();
 
   /**
-   * @brief Update poses from gps.
-   * @param gps The message from gps.
+   * @brief Update info of chassis.
+   * @param imu The message from chassis.
    * @return True if success; false if not needed.
    */
-  bool UpdateGps(const Gps &gps);
+  bool UpdateChassis(const apollo::canbus::Chassis &chassis);
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the
@@ -65,10 +66,17 @@ class PredictorGps : public Predictor {
   apollo::common::Status Update() override;
 
  private:
-  double latest_timestamp_sec_;
+  void ResamplingFilter();
+  void InitLPFilter(double cutoff_freq);
+  void LPFilter();
+
+ private:
+  TimeMarkedList<double> chassis_;
+  double iir_filter_bz_[3];
+  double iir_filter_az_[3];
 };
 
 }  // namespace localization
 }  // namespace apollo
 
-#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_GPS_H_
+#endif  // MODULES_LOCALIZATION_LMD_PREDICTOR_FILTER_PREDICTOR_FILTERED_IMU_H_

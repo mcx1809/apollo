@@ -517,7 +517,7 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
     }
 
     //
-    constexpr double kScalingRatio = 0.8;
+    constexpr double kScalingRatio = 0.505;
     linear_acceleration.set_x(kScalingRatio * linear_acceleration.x());
     linear_acceleration.set_y(kScalingRatio * linear_acceleration.y());
     linear_acceleration.set_z(kScalingRatio * linear_acceleration.z());

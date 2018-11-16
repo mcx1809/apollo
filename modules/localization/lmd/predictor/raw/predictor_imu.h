@@ -15,7 +15,7 @@
  *****************************************************************************/
 
 /**
- * @file predictor.h
+ * @file predictor_imu.h
  * @brief The class of PredictorImu.
  */
 
