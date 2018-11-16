@@ -516,6 +516,15 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
       linear_acceleration_1.CopyFrom(imu_pose_1.linear_acceleration());
     }
 
+    //
+    constexpr double kScalingRatio = 0.8;
+    linear_acceleration.set_x(kScalingRatio * linear_acceleration.x());
+    linear_acceleration.set_y(kScalingRatio * linear_acceleration.y());
+    linear_acceleration.set_z(kScalingRatio * linear_acceleration.z());
+    linear_acceleration_1.set_x(kScalingRatio * linear_acceleration_1.x());
+    linear_acceleration_1.set_y(kScalingRatio * linear_acceleration_1.y());
+    linear_acceleration_1.set_z(kScalingRatio * linear_acceleration_1.z());
+
     auto linear_velocity = new_pose->linear_velocity();
     Point3D linear_velocity_1;
     linear_velocity_1.set_x(

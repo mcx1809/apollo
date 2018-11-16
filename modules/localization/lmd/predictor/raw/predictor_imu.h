@@ -66,10 +66,13 @@ class PredictorImu : public Predictor {
 
  private:
   void ResamplingFilter();
+  void InitLPFilter(double cutoff_freq);
   void LPFilter();
 
  private:
   PoseList raw_imu_;
+  double iir_filter_bz_[3];
+  double iir_filter_az_[3];
 };
 
 }  // namespace localization

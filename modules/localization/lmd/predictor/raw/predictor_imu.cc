@@ -34,6 +34,8 @@ PredictorImu::PredictorImu(double memory_cycle_sec)
     : Predictor(memory_cycle_sec), raw_imu_(memory_cycle_sec) {
   name_ = kPredictorImuName;
   on_adapter_thread_ = true;
+  constexpr double kCutoffFreq = 20.0;
+  InitLPFilter(kCutoffFreq);
 }
 
 PredictorImu::~PredictorImu() {}
@@ -66,7 +68,7 @@ bool PredictorImu::Updateable() const {
 }
 
 Status PredictorImu::Update() {
-  ResamplingFilter();
+  LPFilter();
   return Status::OK();
 }
 
@@ -80,6 +82,19 @@ void PredictorImu::ResamplingFilter() {
     raw_imu_.FindNearestPose(timestamp_sec, &pose);
     predicted_.Push(timestamp_sec, pose);
   }
+}
+
+void PredictorImu::InitLPFilter(double cutoff_freq) {
+  auto omega = 2.0 * M_PI * cutoff_freq * kSamplingInterval;
+  auto sin_o = std::sin(omega);
+  auto cos_o = std::cos(omega);
+  auto alpha = sin_o / (2.0 / std::sqrt(2));
+  iir_filter_bz_[0] = (1.0 - cos_o) / 2.0;
+  iir_filter_bz_[1] = 1.0 - cos_o;
+  iir_filter_bz_[2] = (1.0 - cos_o) / 2.0;
+  iir_filter_az_[0] = 1.0 + alpha;
+  iir_filter_az_[1] = -2.0 * cos_o;
+  iir_filter_az_[2] = 1.0 - alpha;
 }
 
 void PredictorImu::LPFilter() {
@@ -116,10 +131,10 @@ void PredictorImu::LPFilter() {
   }
 
   //  two-order Butterworth filter
-  auto but_filter = [](double x_0, double x_1, double x_2, double y_1,
-                       double y_2) {
-    const double bz[3] = {0.024472, 0.048943, 0.024472};
-    const double az[3] = {1.2185, -1.9021, 0.78149};
+  auto but_filter = [&](double x_0, double x_1, double x_2, double y_1,
+                        double y_2) {
+    const auto& bz = iir_filter_bz_;
+    const auto& az = iir_filter_az_;
     return (bz[0] * x_0 + bz[1] * x_1 + bz[2] * x_2 - az[1] * y_1 -
             az[2] * y_2) /
            az[0];
