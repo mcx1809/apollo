@@ -16,6 +16,8 @@
 
 #include <iomanip>
 
+#include "modules/common/time/time_util.h"
+#include "modules/localization/common/localization_gflags.h"
 #include "modules/localization/lmd/predictor/raw/predictor_imu.h"
 
 #include "modules/common/log.h"
@@ -25,6 +27,8 @@ namespace localization {
 
 using apollo::common::Point3D;
 using apollo::common::Status;
+using apollo::common::time::TimeUtil;
+using apollo::drivers::gnss::Imu;
 
 namespace {
 constexpr double kSamplingInterval = 0.01;
@@ -48,13 +52,59 @@ bool PredictorImu::UpdateImu(const CorrectedImu& imu) {
     return false;
   }
 
+  //
+  auto scale = [](Point3D v) {
+    // v.set_x(0.95 * v.x());
+    // v.set_y(0.795 * v.y());
+    // v.set_x(0.7 * v.x());
+    // v.set_y(0.5 * v.y());
+    return v;
+  };
+  auto pose = imu.imu();
+  pose.mutable_linear_acceleration()->CopyFrom(
+      scale(pose.linear_acceleration()));
+
   auto timestamp_sec = imu.header().timestamp_sec();
-  if (!raw_imu_.Push(timestamp_sec, imu.imu())) {
+  if (!raw_imu_.Push(timestamp_sec, pose)) {
     AWARN << std::setprecision(15)
           << "Failed push pose to list, with timestamp[" << timestamp_sec
           << "]";
     return false;
   }
+
+  return true;
+}
+
+bool PredictorImu::UpdateRawImu(const Imu& imu) {
+  /*if (!imu.has_measurement_time() || !imu.has_linear_acceleration() ||
+      !imu.has_angular_velocity()) {
+    AERROR << "Message has not some feilds";
+    return false;
+  }
+
+  //
+  FLAGS_imu_rate = 1.0 / 600.0;
+  auto timestamp_sec = TimeUtil::Gps2unix(imu.measurement_time());
+  Pose pose;
+  pose.mutable_linear_acceleration()->set_x(imu.linear_acceleration().x() *
+                                            FLAGS_imu_rate);
+  pose.mutable_linear_acceleration()->set_y(imu.linear_acceleration().y() *
+                                            FLAGS_imu_rate);
+  // pose.mutable_linear_acceleration()->set_z(imu.linear_acceleration().z() *
+  //                                           FLAGS_imu_rate);
+  pose.mutable_linear_acceleration()->set_z(0.0);
+  pose.mutable_angular_velocity()->set_x(imu.angular_velocity().x() *
+                                         FLAGS_imu_rate);
+  pose.mutable_angular_velocity()->set_y(imu.angular_velocity().y() *
+                                         FLAGS_imu_rate);
+  pose.mutable_angular_velocity()->set_z(imu.angular_velocity().z() *
+                                         FLAGS_imu_rate);
+  if (!raw_imu_.Push(timestamp_sec, pose)) {
+    AWARN << std::setprecision(15)
+          << "Failed push pose to list, with timestamp[" << timestamp_sec
+          << "]";
+    return false;
+  }*/
 
   return true;
 }
@@ -68,7 +118,8 @@ bool PredictorImu::Updateable() const {
 }
 
 Status PredictorImu::Update() {
-  LPFilter();
+  ResamplingFilter();
+  // LPFilter();
   return Status::OK();
 }
 

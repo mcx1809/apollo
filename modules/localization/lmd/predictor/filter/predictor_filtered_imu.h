@@ -24,7 +24,7 @@
 
 #include "modules/canbus/proto/chassis.pb.h"
 
-#include "modules/localization/lmd/common/tm_list.h"
+#include "modules/common/math/kalman_filter.h"
 #include "modules/localization/lmd/predictor/predictor.h"
 
 /**
@@ -49,7 +49,7 @@ class PredictorFilteredImu : public Predictor {
    * @param imu The message from chassis.
    * @return True if success; false if not needed.
    */
-  bool UpdateChassis(const apollo::canbus::Chassis &chassis);
+  bool UpdateChassis(const apollo::canbus::Chassis& chassis);
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the
@@ -66,14 +66,12 @@ class PredictorFilteredImu : public Predictor {
   apollo::common::Status Update() override;
 
  private:
-  void ResamplingFilter();
-  void InitLPFilter(double cutoff_freq);
-  void LPFilter();
+  void AccelKalmanFilterInit(double a_estimate);
+  double AccelKalmanFilterProcess(double a_control, double a_observation);
 
  private:
-  TimeMarkedList<double> chassis_;
-  double iir_filter_bz_[3];
-  double iir_filter_az_[3];
+  PoseList chassis_speed_;
+  apollo::common::math::KalmanFilter<double, 1, 1, 1> accel_kf_;
 };
 
 }  // namespace localization

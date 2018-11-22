@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "modules/common/proto/geometry.pb.h"
 
@@ -93,6 +94,21 @@ void FillPoseFromImu(const Pose& imu_pose, Pose* pose) {
     pose->mutable_euler_angles()->CopyFrom(imu_pose.euler_angles());
   }
 }
+
+const std::string& PredictorGpsName() {
+  static const std::string name(kPredictorGpsName);
+  return name;
+}
+
+const std::string& PredictorImuName() {
+  static const std::string name(kPredictorFilteredImuName);
+  return name;
+}
+
+const std::string& PredictorPerceptionName() {
+  static const std::string name(kPredictorPerceptionName);
+  return name;
+}
 }  // namespace
 
 PredictorOutput::PredictorOutput(
@@ -100,18 +116,19 @@ PredictorOutput::PredictorOutput(
     const std::function<Status(double, const Pose&)>& publish_loc_func)
     : Predictor(memory_cycle_sec), publish_loc_func_(publish_loc_func) {
   name_ = kPredictorOutputName;
-  dep_predicteds_.emplace(kPredictorGpsName, PoseList(memory_cycle_sec));
-  dep_predicteds_.emplace(kPredictorImuName, PoseList(memory_cycle_sec));
-  dep_predicteds_.emplace(kPredictorPerceptionName, PoseList(memory_cycle_sec));
+  dep_predicteds_.emplace(PredictorGpsName(), PoseList(memory_cycle_sec));
+  dep_predicteds_.emplace(PredictorImuName(), PoseList(memory_cycle_sec));
+  dep_predicteds_.emplace(PredictorPerceptionName(),
+                          PoseList(memory_cycle_sec));
   on_adapter_thread_ = true;
 }
 
 PredictorOutput::~PredictorOutput() {}
 
 bool PredictorOutput::Updateable() const {
-  const auto& imu = dep_predicteds_.find(kPredictorImuName)->second;
+  const auto& imu = dep_predicteds_.find(PredictorImuName())->second;
   if (predicted_.empty()) {
-    const auto& gps = dep_predicteds_.find(kPredictorGpsName)->second;
+    const auto& gps = dep_predicteds_.find(PredictorGpsName())->second;
     return !gps.empty() && !imu.empty();
   } else {
     return !imu.empty() && predicted_.Older(imu);
@@ -120,7 +137,7 @@ bool PredictorOutput::Updateable() const {
 
 Status PredictorOutput::Update() {
   if (predicted_.empty()) {
-    const auto& gps = dep_predicteds_[kPredictorGpsName];
+    const auto& gps = dep_predicteds_[PredictorGpsName()];
     auto gps_latest = gps.Latest();
     auto timestamp_sec = gps_latest->first;
     auto pose = gps_latest->second;
@@ -131,7 +148,7 @@ Status PredictorOutput::Update() {
           pose.orientation().qy(), pose.orientation().qz()));
     }
 
-    const auto& imu = dep_predicteds_[kPredictorImuName];
+    const auto& imu = dep_predicteds_[PredictorImuName()];
     Pose imu_pose;
     imu.FindNearestPose(timestamp_sec, &imu_pose);
 
@@ -145,13 +162,13 @@ Status PredictorOutput::Update() {
     return publish_loc_func_(timestamp_sec, pose);
   } else {
     // get timestamp from imu
-    const auto& imu = dep_predicteds_[kPredictorImuName];
+    const auto& imu = dep_predicteds_[PredictorImuName()];
     auto timestamp_sec = imu.Latest()->first;
 
     // base pose for prediction
     double base_timestamp_sec;
     Pose base_pose;
-    const auto& perception = dep_predicteds_[kPredictorPerceptionName];
+    const auto& perception = dep_predicteds_[PredictorPerceptionName()];
     auto perception_pose_it = perception.RangeOf(timestamp_sec).first;
     if (perception_pose_it != perception.end()) {
       base_timestamp_sec = perception_pose_it->first;
@@ -272,7 +289,7 @@ bool PredictorOutput::PredictByParticleFiler(double old_timestamp_sec,
   position_1.set_y(best_particle.y);
   position_1.set_z(old_pose.position().z());
   new_pose->mutable_position()->CopyFrom(position_1);
-  const auto& imu = dep_predicteds_[kPredictorImuName];
+  const auto& imu = dep_predicteds_[PredictorImuName()];
   auto p = imu.RangeOf(old_timestamp_sec);
   auto it = p.first;
   if (it == imu.end()) {
@@ -407,7 +424,7 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
     return false;
   }
 
-  const auto& imu = dep_predicteds_[kPredictorImuName];
+  const auto& imu = dep_predicteds_[PredictorImuName()];
   auto p = imu.RangeOf(old_timestamp_sec);
   auto it = p.first;
   auto it_1 = p.second;
@@ -515,15 +532,6 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
     } else {
       linear_acceleration_1.CopyFrom(imu_pose_1.linear_acceleration());
     }
-
-    //
-    constexpr double kScalingRatio = 0.505;
-    linear_acceleration.set_x(kScalingRatio * linear_acceleration.x());
-    linear_acceleration.set_y(kScalingRatio * linear_acceleration.y());
-    linear_acceleration.set_z(kScalingRatio * linear_acceleration.z());
-    linear_acceleration_1.set_x(kScalingRatio * linear_acceleration_1.x());
-    linear_acceleration_1.set_y(kScalingRatio * linear_acceleration_1.y());
-    linear_acceleration_1.set_z(kScalingRatio * linear_acceleration_1.z());
 
     auto linear_velocity = new_pose->linear_velocity();
     Point3D linear_velocity_1;

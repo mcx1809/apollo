@@ -19,6 +19,7 @@ cc_library(
         "//modules/common/status",
         "//modules/common/time",
         "//modules/common/util:thread_pool",
+        "//modules/drivers/gnss/proto:imu_proto",
         "//modules/localization:localization_base",
         "//modules/localization/common:localization_common",
         "//modules/localization/lmd/predictor:localization_lmd_predictor",

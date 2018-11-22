@@ -35,6 +35,7 @@
 #include "ros/include/ros/ros.h"
 
 #include "modules/canbus/proto/chassis.pb.h"
+#include "modules/drivers/gnss/proto/imu.pb.h"
 #include "modules/localization/proto/gps.pb.h"
 #include "modules/localization/proto/imu.pb.h"
 #include "modules/localization/proto/localization.pb.h"
@@ -88,14 +89,16 @@ class LMDLocalization : public LocalizationBase {
     }
 
     void OnMessage(const Message &msg) {
-      if (!ph->Busy()) {
-        for (const auto &msg : msg_list) {
+      if (ph != nullptr) {
+        if (!ph->Busy()) {
+          for (const auto &msg : msg_list) {
+            on_msg_recieved(msg);
+          }
+          msg_list.clear();
           on_msg_recieved(msg);
+        } else {
+          msg_list.emplace_back(msg);
         }
-        msg_list.clear();
-        on_msg_recieved(msg);
-      } else {
-        msg_list.emplace_back(msg);
       }
     }
   };
@@ -118,6 +121,7 @@ class LMDLocalization : public LocalizationBase {
 
  private:
   void OnImu(const CorrectedImu &imu);
+  void OnRawImu(const apollo::drivers::gnss::Imu &imu);
   void OnGps(const Gps &gps);
   void OnChassis(const apollo::canbus::Chassis &chassis);
   void OnPerceptionObstacles(
@@ -133,6 +137,7 @@ class LMDLocalization : public LocalizationBase {
   const std::vector<double> map_offset_;
   std::map<std::string, PredictorHandler> predictors_;
   MessageReciever<CorrectedImu> imu_reciever_;
+  MessageReciever<apollo::drivers::gnss::Imu> imu_reciever1_;
   MessageReciever<Gps> gps_reciever_;
   MessageReciever<apollo::canbus::Chassis> filtered_imu_reciever_;
   MessageReciever<apollo::perception::PerceptionObstacles> perception_reciever_;

@@ -14,7 +14,9 @@
  * limitations under the License.
  *****************************************************************************/
 
+#include <algorithm>
 #include <iomanip>
+#include <string>
 
 #include "modules/localization/lmd/predictor/filter/predictor_filtered_imu.h"
 
@@ -28,16 +30,18 @@ using apollo::common::Status;
 
 namespace {
 constexpr double kSamplingInterval = 0.01;
+
+const std::string& PredictorImuName() {
+  static const std::string name(kPredictorImuName);
+  return name;
+}
 }  // namespace
 
 PredictorFilteredImu::PredictorFilteredImu(double memory_cycle_sec)
-    : Predictor(memory_cycle_sec) {
+    : Predictor(memory_cycle_sec), chassis_speed_(memory_cycle_sec) {
   name_ = kPredictorFilteredImuName;
-  dep_predicteds_.emplace(kPredictorImuName, PoseList(memory_cycle_sec));
+  dep_predicteds_.emplace(PredictorImuName(), PoseList(memory_cycle_sec));
   on_adapter_thread_ = true;
-
-  constexpr double kCutoffFreq = 20.0;
-  InitLPFilter(kCutoffFreq);
 }
 
 PredictorFilteredImu::~PredictorFilteredImu() {}
@@ -51,7 +55,9 @@ bool PredictorFilteredImu::UpdateChassis(
   }
 
   auto timestamp_sec = chassis.header().timestamp_sec();
-  if (!chassis_.Push(timestamp_sec, chassis.speed_mps())) {
+  Pose pose;
+  pose.mutable_linear_velocity()->set_x(chassis.speed_mps());
+  if (!chassis_speed_.Push(timestamp_sec, pose)) {
     AWARN << std::setprecision(15)
           << "Failed push speed_mps to list, with timestamp[" << timestamp_sec
           << "]";
@@ -62,94 +68,85 @@ bool PredictorFilteredImu::UpdateChassis(
 }
 
 bool PredictorFilteredImu::Updateable() const {
-  const auto& imu = dep_predicteds_.find(kPredictorImuName)->second;
+  const auto& imu = dep_predicteds_.find(PredictorImuName())->second;
   if (predicted_.empty()) {
     return !imu.empty();
   } else {
-    return !predicted_.Newer(imu.Latest()->first - kSamplingInterval);
+    return !predicted_.Newer(imu.Latest()->first - kSamplingInterval) &&
+           !predicted_.Newer(chassis_speed_.Latest()->first -
+                             kSamplingInterval);
   }
 }
 
 Status PredictorFilteredImu::Update() {
-  LPFilter();
+  double timestamp_sec;
+  Pose pose;
+
+  const auto& imu = dep_predicteds_.find(PredictorImuName())->second;
+  auto latest_it = predicted_.Latest();
+  if (latest_it == predicted_.end()) {
+    timestamp_sec =
+        std::min(chassis_speed_.Latest()->first, imu.Latest()->first);
+    imu.FindNearestPose(timestamp_sec, &pose);
+    AccelKalmanFilterInit(pose.linear_acceleration().y());
+  } else {
+    timestamp_sec = latest_it->first + kSamplingInterval;
+    imu.FindNearestPose(timestamp_sec, &pose);
+
+    auto a_control = pose.linear_acceleration().y();
+    Pose chassis_pose0, chassis_pose1;
+    chassis_speed_.FindNearestPose(timestamp_sec - kSamplingInterval,
+                                   &chassis_pose0);
+    chassis_speed_.FindNearestPose(timestamp_sec, &chassis_pose1);
+    auto a_observation = (chassis_pose1.linear_velocity().x() -
+                          chassis_pose0.linear_velocity().x()) /
+                         kSamplingInterval;
+
+    auto a_estimate = AccelKalmanFilterProcess(a_control, a_observation);
+    pose.mutable_linear_acceleration()->set_y(a_estimate);
+  }
+
+  predicted_.Push(timestamp_sec, pose);
   return Status::OK();
 }
 
-void PredictorFilteredImu::ResamplingFilter() {
-  const auto& imu = dep_predicteds_[kPredictorImuName];
-  auto latest_it = predicted_.Latest();
-  if (latest_it == predicted_.end()) {
-    predicted_.Push(imu.begin()->first, imu.begin()->second);
-  } else {
-    auto timestamp_sec = latest_it->first + kSamplingInterval;
-    Pose pose;
-    imu.FindNearestPose(timestamp_sec, &pose);
-    predicted_.Push(timestamp_sec, pose);
-  }
+void PredictorFilteredImu::AccelKalmanFilterInit(double a_estimate) {
+  Eigen::Matrix<double, 1, 1> x;
+  x(0, 0) = a_estimate;
+  Eigen::Matrix<double, 1, 1> P;
+  constexpr double kP = 0.25;
+  P(0, 0) = kP;
+  Eigen::Matrix<double, 1, 1> F;
+  F(0, 0) = 0.0;
+  Eigen::Matrix<double, 1, 1> Q;
+  constexpr double kQ = 0.25;
+  Q(0, 0) = kQ;
+  Eigen::Matrix<double, 1, 1> H;
+  H(0, 0) = 1.0;
+  Eigen::Matrix<double, 1, 1> R;
+  constexpr double kR = 0.01;
+  R(0, 0) = kR;
+  Eigen::Matrix<double, 1, 1> B;
+  B(0, 0) = 1.0;
+
+  accel_kf_.SetStateEstimate(x, P);
+  accel_kf_.SetTransitionMatrix(F);
+  accel_kf_.SetTransitionNoise(Q);
+  accel_kf_.SetObservationMatrix(H);
+  accel_kf_.SetObservationNoise(R);
+  accel_kf_.SetControlMatrix(B);
 }
 
-void PredictorFilteredImu::InitLPFilter(double cutoff_freq) {
-  auto omega = 2.0 * M_PI * cutoff_freq * kSamplingInterval;
-  auto sin_o = std::sin(omega);
-  auto cos_o = std::cos(omega);
-  auto alpha = sin_o / (2.0 / std::sqrt(2));
-  iir_filter_bz_[0] = (1.0 - cos_o) / 2.0;
-  iir_filter_bz_[1] = 1.0 - cos_o;
-  iir_filter_bz_[2] = (1.0 - cos_o) / 2.0;
-  iir_filter_az_[0] = 1.0 + alpha;
-  iir_filter_az_[1] = -2.0 * cos_o;
-  iir_filter_az_[2] = 1.0 - alpha;
-}
-
-void PredictorFilteredImu::LPFilter() {
-  double timestamp_sec;
-  Point3D x_0, x_1, x_2;
-  Point3D y_0, y_1, y_2;
-  Pose pose;
-
-  const auto& imu = dep_predicteds_[kPredictorImuName];
-  auto latest_it = predicted_.Latest();
-  if (latest_it == predicted_.end()) {
-    timestamp_sec = imu.begin()->first;
-
-    x_0 = x_1 = x_2 = imu.begin()->second.linear_acceleration();
-    y_1 = y_2 = x_2;
-    pose = imu.begin()->second;
-  } else {
-    timestamp_sec = latest_it->first + kSamplingInterval;
-
-    imu.FindNearestPose(timestamp_sec - 2.0 * kSamplingInterval, &pose);
-    x_2 = pose.linear_acceleration();
-    imu.FindNearestPose(timestamp_sec - kSamplingInterval, &pose);
-    x_1 = pose.linear_acceleration();
-    imu.FindNearestPose(timestamp_sec, &pose);
-    x_0 = pose.linear_acceleration();
-
-    if (predicted_.size() == 1) {
-      y_2 = x_2;
-    } else {
-      auto it_2 = latest_it;
-      it_2--;
-      y_2 = it_2->second.linear_acceleration();
-    }
-    y_1 = latest_it->second.linear_acceleration();
-  }
-
-  //  two-order Butterworth filter
-  auto but_filter = [&](double x_0, double x_1, double x_2, double y_1,
-                        double y_2) {
-    const auto& bz = iir_filter_bz_;
-    const auto& az = iir_filter_az_;
-    return (bz[0] * x_0 + bz[1] * x_1 + bz[2] * x_2 - az[1] * y_1 -
-            az[2] * y_2) /
-           az[0];
-  };
-
-  y_0.set_x(but_filter(x_0.x(), x_1.x(), x_2.x(), y_1.x(), y_2.x()));
-  y_0.set_y(but_filter(x_0.y(), x_1.y(), x_2.y(), y_1.y(), y_2.y()));
-  y_0.set_z(but_filter(x_0.z(), x_1.z(), x_2.z(), y_1.z(), y_2.z()));
-  pose.mutable_linear_acceleration()->CopyFrom(y_0);
-  predicted_.Push(timestamp_sec, pose);
+double PredictorFilteredImu::AccelKalmanFilterProcess(double a_control,
+                                                      double a_observation) {
+  Eigen::Matrix<double, 1, 1> u;
+  u(0, 0) = a_control;
+  accel_kf_.Predict(u);
+  Eigen::Matrix<double, 1, 1> z;
+  z(0, 0) = a_observation;
+  accel_kf_.Correct(z);
+  auto state = accel_kf_.GetStateEstimate();
+  return state(0, 0);
 }
 
 }  // namespace localization

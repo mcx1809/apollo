@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "localization_lmd_predictor_filter_base",
     deps = [
+        "//modules/common/math",
         "//modules/localization/lmd/predictor:localization_lmd_predictor",
     ],
 )

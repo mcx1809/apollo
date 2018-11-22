@@ -22,6 +22,7 @@
 #ifndef MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_IMU_H_
 #define MODULES_LOCALIZATION_LMD_PREDICTOR_RAW_PREDICTOR_IMU_H_
 
+#include "modules/drivers/gnss/proto/imu.pb.h"
 #include "modules/localization/proto/imu.pb.h"
 
 #include "modules/localization/lmd/predictor/predictor.h"
@@ -49,6 +50,13 @@ class PredictorImu : public Predictor {
    * @return True if success; false if not needed.
    */
   bool UpdateImu(const CorrectedImu& imu);
+
+  /**
+   * @brief Update poses from raw imu.
+   * @param imu The message from raw imu.
+   * @return True if success; false if not needed.
+   */
+  bool UpdateRawImu(const apollo::drivers::gnss::Imu& imu);
 
   /**
    * @brief Overrided implementation of the virtual function "Updateable" in the

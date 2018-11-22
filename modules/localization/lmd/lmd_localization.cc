@@ -39,6 +39,7 @@ using apollo::common::adapter::GpsAdapter;
 using apollo::common::adapter::ImuAdapter;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::common::util::ThreadPool;
+using apollo::drivers::gnss::Imu;
 using apollo::perception::PerceptionObstacles;
 
 namespace {
@@ -86,9 +87,11 @@ Status LMDLocalization::Start() {
 
   // imu
   auto *predictor_imu = new PredictorImu(kDefaultMemoryCycle);
+  auto &ph_imu = *add_predictor(predictor_imu);
   imu_reciever_.Set(
-      *add_predictor(predictor_imu),
-      [=](const CorrectedImu &msg) { predictor_imu->UpdateImu(msg); });
+      ph_imu, [=](const CorrectedImu &msg) { predictor_imu->UpdateImu(msg); });
+  imu_reciever1_.Set(ph_imu,
+                     [=](const Imu &msg) { predictor_imu->UpdateRawImu(msg); });
 
   // filtered_imu
   auto *predictor_filtered_imu = new PredictorFilteredImu(kDefaultMemoryCycle);
@@ -147,6 +150,7 @@ Status LMDLocalization::Start() {
   // initialize adapter manager
   AdapterManager::Init(FLAGS_lmd_adapter_config_file);
   AdapterManager::AddImuCallback(&LMDLocalization::OnImu, this);
+  AdapterManager::AddRawImuCallback(&LMDLocalization::OnRawImu, this);
   AdapterManager::AddGpsCallback(&LMDLocalization::OnGps, this);
   AdapterManager::AddChassisCallback(&LMDLocalization::OnChassis, this);
   AdapterManager::AddPerceptionObstaclesCallback(
@@ -170,6 +174,12 @@ Status LMDLocalization::Stop() {
 
 void LMDLocalization::OnImu(const CorrectedImu &imu) {
   imu_reciever_.OnMessage(imu);
+  // predicting
+  Predicting();
+}
+
+void LMDLocalization::OnRawImu(const Imu &imu) {
+  imu_reciever1_.OnMessage(imu);
   // predicting
   Predicting();
 }

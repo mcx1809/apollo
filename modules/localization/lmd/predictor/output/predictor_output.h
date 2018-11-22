@@ -77,7 +77,6 @@ class PredictorOutput : public Predictor {
  private:
   bool PredictByImu(double old_timestamp_sec, const Pose &old_pose,
                     double new_timestamp_sec, Pose *new_pose);
-
   bool PredictByParticleFiler(double old_timestamp_sec, const Pose &old_pose,
                               double new_timestamp_sec, Pose *new_pose);
 
