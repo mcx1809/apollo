@@ -7,12 +7,10 @@ cc_library(
     srcs = [
         "predictor_output.cc",
         "predictor_print_error.cc",
-        "lmd_particle_filter.cc",
     ],
     hdrs = [
         "predictor_output.h",
         "predictor_print_error.h",
-        "lmd_particle_filter.h",
     ],
     deps = [
         "//modules/common:log",
@@ -31,7 +29,7 @@ cc_test(
     name = "localization_lmd_predictor_output_test",
     size = "small",
     srcs = [
-        "predictor_output_test.cc"
+        "predictor_output_test.cc",
     ],
     deps = [
         ":localization_lmd_predictor_output",
