@@ -166,18 +166,21 @@ const std::pair<int64_t, int64_t> LMProvider::GetRightLaneMarkerIndex(
   return result;
 }
 
-const apollo::localization::OdometryLaneMarker* LMProvider::GetLaneMarker(
-    const std::pair<int64_t, int64_t>& current_index) const {
+bool LMProvider::GetLaneMarker(
+    const std::pair<int64_t, int64_t>& current_index,
+    apollo::localization::OdometryLaneMarker* reslut_lane_ptr) const {
+  CHECK_NOTNULL(reslut_lane_ptr);
   if (current_index.first < 0 ||
       current_index.first >= GetLaneMarkerPackSize() ||
       current_index.second < 0 ||
       current_index.second >= GetLaneMarkerSize(current_index.first)) {
     AERROR << "No LaneMarker with index (" << current_index.first << ","
            << current_index.second << ")";
-    return nullptr;
+    return false;
   }
-  return &LaneMarkersPack_.lane_markers(current_index.first)
-              .lane_marker(current_index.second);
+  reslut_lane_ptr->CopyFrom(LaneMarkersPack_.lane_markers(current_index.first)
+                                .lane_marker(current_index.second));
+  return true;
 }
 
 }  // namespace localization

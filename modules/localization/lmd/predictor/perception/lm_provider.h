@@ -89,10 +89,11 @@ class LMProvider {
   /**
    * @brief Get lane marker according to index pair.
    * @brief current_index index pair of current lane marker
-   * @return A lane marker with the desired index pair or nullptr.
+   * @return true if succeed copy lanemarker to result_lane_ptr
    */
-  const apollo::localization::OdometryLaneMarker* GetLaneMarker(
-      const std::pair<int64_t, int64_t>& current_index) const;
+  bool GetLaneMarker(
+      const std::pair<int64_t, int64_t>& current_index,
+      apollo::localization::OdometryLaneMarker* result_lane_ptr) const;
 
   /**
    * @brief Get the lane marker pack size.

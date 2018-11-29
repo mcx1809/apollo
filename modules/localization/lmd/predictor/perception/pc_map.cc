@@ -54,10 +54,10 @@ PCMap::PCMap(LMProvider* provider) {
       auto lane_marker_size = provider_->GetLaneMarkerSize(pack_index);
       for (decltype(lane_marker_size) lane_index = 0;
            lane_index < lane_marker_size; ++lane_index) {
-        auto lane_marker =
-            provider_->GetLaneMarker(std::make_pair(pack_index, lane_index));
-        if (lane_marker != nullptr) {
-          LoadLaneMarker(*lane_marker);
+        OdometryLaneMarker lane_marker;
+        if (provider_->GetLaneMarker(std::make_pair(pack_index, lane_index),
+                                     &lane_marker)) {
+          LoadLaneMarker(lane_marker);
         }
       }
     }
