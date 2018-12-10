@@ -219,6 +219,202 @@ bool PredictorOutput::UpdateLaneMarkers(
   return true;
 }
 
+bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
+                                              const Pose& old_pose,
+                                              double new_timestamp_sec,
+                                              Pose* new_pose) {
+  if (!old_pose.has_position() || !old_pose.has_orientation() ||
+      !old_pose.has_linear_velocity()) {
+    AERROR << "Old_pose has no some fields";
+    return false;
+  }
+  new_pose->CopyFrom(old_pose);
+  double sensor_range = 5;
+  double sigma_pos[3] = {0.03, 0.03, 0.001};
+  double sigma_landmark[2] = {0.03, 0.03};
+  std::default_random_engine gen;
+  std::normal_distribution<double> N_x_init(0, sigma_pos[0]);
+  std::normal_distribution<double> N_y_init(0, sigma_pos[1]);
+  std::normal_distribution<double> N_theta_init(0, sigma_pos[2]);
+  std::normal_distribution<double> N_obs_x(0, sigma_landmark[0]);
+  std::normal_distribution<double> N_obs_y(0, sigma_landmark[1]);
+  auto delta_time = new_timestamp_sec - old_timestamp_sec;
+  if (!pc_filter_.Initialized()) {
+    double n_x, n_y, n_theta;
+    auto x = new_pose->position().x();
+    auto y = new_pose->position().y();
+    auto theta = new_pose->heading();
+    n_x = N_x_init(gen);
+    n_y = N_y_init(gen);
+    n_theta = N_theta_init(gen);
+    pc_filter_.Init(x + n_x, y + n_y, theta + n_theta, sigma_pos);
+  } else {
+    auto velocity_x = new_pose->linear_velocity().x();
+    auto velocity_y = new_pose->linear_velocity().y();
+    auto velocity_z = new_pose->linear_velocity().z();
+    auto velocity = sqrt(pow(velocity_x, 2.0) + pow(velocity_y, 2.0) +
+                         pow(velocity_z, 2.0));
+    auto yawrate = new_pose->angular_velocity().z();
+    pc_filter_.Prediction(delta_time, sigma_pos, velocity, yawrate);
+  }
+  const auto& lanemarker = lane_markers_.left_lane_marker();
+  auto c0 = lanemarker.c0_position();
+  auto c1 = lanemarker.c1_heading_angle();
+  auto c2 = lanemarker.c2_curvature();
+  auto c3 = lanemarker.c3_curvature_derivative();
+  std::vector<LandMarkObs> noisy_observations;
+  LandMarkObs obs;
+  double n_x, n_y;
+  for (int j = 0; j < 10; ++j) {
+    n_x = N_obs_x(gen);
+    n_y = N_obs_y(gen);
+    obs.x = 0.1 * j + n_x;
+    obs.y = c3 * pow(obs.x, 3.0) + c2 * pow(obs.x, 2.0) + c1 * obs.x + c0 + n_y;
+    noisy_observations.push_back(obs);
+  }
+  pc_filter_.UpdateWeights(sensor_range, sigma_landmark, noisy_observations,
+                           pc_filter_.map);
+  pc_filter_.Resample();
+  std::vector<Particle> particles = pc_filter_.particles;
+  double highest_weight = -1.0;
+  auto best_particle = particles[0];
+  for (std::size_t i = 0; i < particles.size(); ++i) {
+    if (particles[i].weight > highest_weight) {
+      highest_weight = particles[i].weight;
+      best_particle = particles[i];
+    }
+  }
+  PointENU position_1;
+  position_1.set_x(best_particle.x);
+  position_1.set_y(best_particle.y);
+  position_1.set_z(old_pose.position().z());
+  new_pose->mutable_position()->CopyFrom(position_1);
+  const auto& imu = dep_predicteds_[PredictorImuName()];
+  auto p = imu.RangeOf(old_timestamp_sec);
+  auto it = p.first;
+  if (it == imu.end()) {
+    if (p.second != imu.end()) {
+      it = p.second;
+    } else {
+      AERROR << std::setprecision(15)
+             << "Cannot get the lower of range from imu with timestamp["
+             << old_timestamp_sec << "]";
+      return false;
+    }
+  }
+  auto timestamp_sec = old_timestamp_sec;
+  bool finished = false;
+  while (!finished) {
+    Pose imu_pose;
+    double timestamp_sec_1;
+    Pose imu_pose_1;
+    auto it_1 = it;
+    it_1++;
+    if (it_1 != imu.end() && new_timestamp_sec >= it_1->first) {
+      PoseList::InterpolatePose(it->first, it->second, it_1->first,
+                                it_1->second, timestamp_sec, &imu_pose);
+      timestamp_sec_1 = it_1->first;
+      imu_pose_1 = it_1->second;
+    } else {
+      timestamp_sec_1 = new_timestamp_sec;
+      imu_pose = it->second;
+      imu_pose_1 = imu_pose;
+    }
+    if (new_timestamp_sec <= timestamp_sec_1) {
+      finished = true;
+    }
+    if (!finished && timestamp_sec_1 <= timestamp_sec) {
+      it = it_1;
+      imu_pose = imu_pose_1;
+      continue;
+    }
+    if (!imu_pose.has_linear_acceleration() ||
+        !imu_pose_1.has_linear_acceleration() ||
+        !imu_pose.has_angular_velocity() ||
+        !imu_pose_1.has_angular_velocity()) {
+      AERROR << "Imu_pose or imu_pose_1 has no some fields";
+      return false;
+    }
+    auto dt = timestamp_sec_1 - timestamp_sec;
+    auto orientation = new_pose->orientation();
+    Point3D angular_velocity;
+    if (FLAGS_enable_map_reference_unify) {
+      angular_velocity.CopyFrom(
+          QuaternionRotateXYZ(imu_pose.angular_velocity(), orientation));
+    } else {
+      angular_velocity.CopyFrom(imu_pose.angular_velocity());
+    }
+    Point3D angular_velocity_1;
+    if (FLAGS_enable_map_reference_unify) {
+      angular_velocity_1.CopyFrom(
+          QuaternionRotateXYZ(imu_pose_1.angular_velocity(), orientation));
+    } else {
+      angular_velocity_1.CopyFrom(imu_pose_1.angular_velocity());
+    }
+    Point3D angular_vel;
+    angular_vel.set_x((angular_velocity.x() + angular_velocity_1.x()) / 2.0);
+    angular_vel.set_y((angular_velocity.y() + angular_velocity_1.y()) / 2.0);
+    angular_vel.set_z((angular_velocity.z() + angular_velocity_1.z()) / 2.0);
+    EulerAnglesZXYd euler_a(orientation.qw(), orientation.qx(),
+                            orientation.qy(), orientation.qz());
+    auto derivation_roll =
+        angular_vel.x() +
+        std::sin(euler_a.roll()) * std::tan(euler_a.pitch()) * angular_vel.y() +
+        std::cos(euler_a.roll()) * std::tan(euler_a.pitch()) * angular_vel.z();
+    auto derivation_pitch = std::cos(euler_a.roll()) * angular_vel.y() -
+                            std::sin(euler_a.roll()) * angular_vel.z();
+    auto derivation_yaw =
+        std::sin(euler_a.roll()) / std::cos(euler_a.pitch()) * angular_vel.y() +
+        std::cos(euler_a.roll()) / std::cos(euler_a.pitch()) * angular_vel.z();
+    EulerAnglesZXYd euler_b(euler_a.roll() + derivation_roll * dt,
+                            euler_a.pitch() + derivation_pitch * dt,
+                            euler_a.yaw() + derivation_yaw * dt);
+    auto q = euler_b.ToQuaternion();
+    Quaternion orientation_1;
+    orientation_1.set_qw(q.w());
+    orientation_1.set_qx(q.x());
+    orientation_1.set_qy(q.y());
+    orientation_1.set_qz(q.z());
+    Point3D linear_acceleration;
+    if (FLAGS_enable_map_reference_unify) {
+      linear_acceleration.CopyFrom(
+          QuaternionRotateXYZ(imu_pose.linear_acceleration(), orientation));
+    } else {
+      linear_acceleration.CopyFrom(imu_pose.linear_acceleration());
+    }
+    Point3D linear_acceleration_1;
+    if (FLAGS_enable_map_reference_unify) {
+      linear_acceleration_1.CopyFrom(
+          QuaternionRotateXYZ(imu_pose_1.linear_acceleration(), orientation_1));
+    } else {
+      linear_acceleration_1.CopyFrom(imu_pose_1.linear_acceleration());
+    }
+    auto linear_velocity = new_pose->linear_velocity();
+    Point3D linear_velocity_1;
+    linear_velocity_1.set_x(
+        (linear_acceleration.x() + linear_acceleration_1.x()) / 2.0 * dt +
+        linear_velocity.x());
+    linear_velocity_1.set_y(
+        (linear_acceleration.y() + linear_acceleration_1.y()) / 2.0 * dt +
+        linear_velocity.y());
+    linear_velocity_1.set_z(
+        (linear_acceleration.z() + linear_acceleration_1.z()) / 2.0 * dt +
+        linear_velocity.z());
+    new_pose->mutable_orientation()->CopyFrom(orientation_1);
+    new_pose->set_heading(QuaternionToHeading(
+        new_pose->orientation().qw(), new_pose->orientation().qx(),
+        new_pose->orientation().qy(), new_pose->orientation().qz()));
+    new_pose->mutable_linear_velocity()->CopyFrom(linear_velocity_1);
+    FillPoseFromImu(imu_pose_1, new_pose);
+    if (!finished) {
+      timestamp_sec = timestamp_sec_1;
+      it = it_1;
+      imu_pose = imu_pose_1;
+    }
+  }
+  return true;
+}
+
 bool PredictorOutput::PredictByImu(double old_timestamp_sec,
                                    const Pose& old_pose,
                                    double new_timestamp_sec, Pose* new_pose) {
