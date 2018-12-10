@@ -262,15 +262,16 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
   auto c1 = lanemarker.c1_heading_angle();
   auto c2 = lanemarker.c2_curvature();
   auto c3 = lanemarker.c3_curvature_derivative();
-  std::vector<LandMarkObs> noisy_observations;
-  LandMarkObs obs;
+
+  LandMarkObs noisy_observations;
   double n_x, n_y;
   for (int j = 0; j < 10; ++j) {
     n_x = N_obs_x(gen);
     n_y = N_obs_y(gen);
-    obs.x = 0.1 * j + n_x;
-    obs.y = c3 * pow(obs.x, 3.0) + c2 * pow(obs.x, 2.0) + c1 * obs.x + c0 + n_y;
-    noisy_observations.push_back(obs);
+    auto x = 0.1 * j + n_x;
+    auto y = c3 * pow(x, 3.0) + c2 * pow(x, 2.0) + c1 * x + c0 + n_y;
+    noisy_observations.x.emplace_back(x);
+    noisy_observations.y.emplace_back(y);
   }
   pc_filter_.UpdateWeights(sensor_range, sigma_landmark, noisy_observations,
                            pc_filter_.map);

@@ -53,16 +53,16 @@ struct Particle {
 
 struct LandMarkObs {
   int id;
-  double x;
-  double y;
+  std::vector<double> x;
+  std::vector<double> y;
 };
 
 class Map {
  public:
   struct SingleLandmarks {
     int id_i;
-    float x_f;
-    float y_f;
+    std::vector<double> x_f;
+    std::vector<double> y_f;
   };
   std::vector<SingleLandmarks> landmark_list;
 };
@@ -100,7 +100,7 @@ class ParticleFilter {
    * @param observations Vector of landmark observations
    */
   void DataAssociation(std::vector<LandMarkObs> predicted,
-                       std::vector<LandMarkObs> observations);
+                       LandMarkObs observations);
   /**
    * @brief Updates the weights for each particle based on the likelihood
    * of the observed measurements.
@@ -111,8 +111,7 @@ class ParticleFilter {
    * @param map Map class containing map landmarks
    */
   void UpdateWeights(const double sensor_range, const double std_landmark[],
-                     const std::vector<LandMarkObs> observations,
-                     const Map map_landmarks);
+                     const LandMarkObs observations, const Map map_landmarks);
   /**
    * @brief Resamples from the updated set of particles to form
    *   the new set of particles.
@@ -135,6 +134,13 @@ class ParticleFilter {
    */
   double Dist(const double x1, const double y1, const double x2,
               const double y2);
+
+  void CalculateDiff(const Map::SingleLandmarks map_landmark,
+                     const LandMarkObs observation, double* x_diff,
+                     double* y_diff);
+
+  void ComputeError(const LandMarkObs source, const LandMarkObs ground_truth,
+                    double* error);
   /*
    * @brief Read map data struct from a file
    * @param filename given file to read
