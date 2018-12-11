@@ -191,8 +191,8 @@ Status PredictorOutput::Update() {
 
     // predict
     Pose pose;
-    PredictByImu(base_timestamp_sec, base_pose, timestamp_sec, &pose);
-
+    PredictByParticleFilter(base_timestamp_sec, base_pose, timestamp_sec,
+                            &pose);
     // push pose to list
     predicted_.Push(timestamp_sec, pose);
 
@@ -228,6 +228,7 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
     AERROR << "Old_pose has no some fields";
     return false;
   }
+
   new_pose->CopyFrom(old_pose);
   double sensor_range = 5;
   double sigma_pos[3] = {0.03, 0.03, 0.001};
@@ -247,7 +248,7 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
     n_x = N_x_init(gen);
     n_y = N_y_init(gen);
     n_theta = N_theta_init(gen);
-    pc_filter_.Init(x + n_x, y + n_y, theta + n_theta, sigma_pos);
+    pc_filter_.InitParticleFilter(x + n_x, y + n_y, theta + n_theta, sigma_pos);
   } else {
     auto velocity_x = new_pose->linear_velocity().x();
     auto velocity_y = new_pose->linear_velocity().y();
@@ -262,7 +263,6 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
   auto c1 = lanemarker.c1_heading_angle();
   auto c2 = lanemarker.c2_curvature();
   auto c3 = lanemarker.c3_curvature_derivative();
-
   LandMarkObs noisy_observations;
   double n_x, n_y;
   for (int j = 0; j < 10; ++j) {
@@ -289,7 +289,7 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
   position_1.set_x(best_particle.x);
   position_1.set_y(best_particle.y);
   position_1.set_z(old_pose.position().z());
-  new_pose->mutable_position()->CopyFrom(position_1);
+
   const auto& imu = dep_predicteds_[PredictorImuName()];
   auto p = imu.RangeOf(old_timestamp_sec);
   auto it = p.first;

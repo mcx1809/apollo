@@ -27,8 +27,9 @@ ParticleFilter::ParticleFilter() : num_particles_(0), is_initialized_(false) {}
 
 ParticleFilter::~ParticleFilter() {}
 
-void ParticleFilter::Init(const double x, const double y, const double theta,
-                          const double std[]) {
+void ParticleFilter::InitParticleFilter(const double x, const double y,
+                                        const double theta,
+                                        const double std[]) {
   if (!ReadMapData("modules/localization/testdata/map_data.txt", &map)) {
     AERROR << "Could not open map file";
     return;
@@ -88,8 +89,8 @@ void ParticleFilter::ComputeError(const LandMarkObs source,
   }
 }
 
-void ParticleFilter::CalculateDiff(const Map::SingleLandmarks map_landmark,
-                                   const LandMarkObs observation,
+void ParticleFilter::CalculateDiff(const Map::SingleLandmarks& map_landmark,
+                                   const LandMarkObs& observation,
                                    double* x_diff, double* y_diff) {
   CHECK_NOTNULL(x_diff);
   CHECK_NOTNULL(y_diff);
@@ -140,16 +141,16 @@ void ParticleFilter::UpdateWeights(const double sensor_range,
       double distance = Dist(x_lm[0], y_lm[0], p.x, p.y);
       if (distance <= sensor_range) {
         LandMarkObs obs = {id_lm, x_lm, y_lm};
-        predicted.push_back(obs);
+        predicted.emplace_back(obs);
       }
     }
     DataAssociation(predicted, gObservations);
     double prob = 1.0;
     double std_x = std_landmark[0];
     double std_y = std_landmark[1];
-    double x_diff, y_diff;
+    double x_diff = 0.0;
+    double y_diff = 0.0;
     double c = 1 / (2 * M_PI * std_x * std_y);
-
     Map::SingleLandmarks lm;
     lm = map_landmarks.landmark_list[gObservations.id];
     CalculateDiff(lm, gObservations, &x_diff, &y_diff);
@@ -186,6 +187,7 @@ double ParticleFilter::Dist(const double x1, const double y1, const double x2,
 bool ParticleFilter::ReadMapData(const std::string filename, Map* map) {
   std::ifstream in_file_map(filename.c_str(), std::ifstream::in);
   if (!in_file_map) {
+    AERROR << "Input Map File error";
     return false;
   }
   std::string line_map;
@@ -199,10 +201,10 @@ bool ParticleFilter::ReadMapData(const std::string filename, Map* map) {
     for (size_t i = 0; i < 10; ++i) {
       iss_map >> landmark_x_f;
       iss_map >> landmark_y_f;
-      single_landmark_temp.x_f[i] = landmark_x_f;
-      single_landmark_temp.y_f[i] = landmark_y_f;
+      single_landmark_temp.x_f.emplace_back(landmark_x_f);
+      single_landmark_temp.y_f.emplace_back(landmark_y_f);
     }
-    map->landmark_list.push_back(single_landmark_temp);
+    map->landmark_list.emplace_back(single_landmark_temp);
   }
   return true;
 }

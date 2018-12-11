@@ -80,8 +80,8 @@ class ParticleFilter {
    * @param std[] Array of dimension 3 [standard deviation of x [m], standard
    * deviation of y [m] standard deviation of yaw [rad]]
    */
-  void Init(const double x, const double y, const double theta,
-            const double std[]);
+  void InitParticleFilter(const double x, const double y, const double theta,
+                          const double std[]);
   /**
    * @brief Predicts the state for the next time step
    *   using the process model.
@@ -135,8 +135,8 @@ class ParticleFilter {
   double Dist(const double x1, const double y1, const double x2,
               const double y2);
 
-  void CalculateDiff(const Map::SingleLandmarks map_landmark,
-                     const LandMarkObs observation, double* x_diff,
+  void CalculateDiff(const Map::SingleLandmarks& map_landmark,
+                     const LandMarkObs& observation, double* x_diff,
                      double* y_diff);
 
   void ComputeError(const LandMarkObs source, const LandMarkObs ground_truth,
