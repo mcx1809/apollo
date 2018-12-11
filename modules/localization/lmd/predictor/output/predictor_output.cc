@@ -202,8 +202,7 @@ Status PredictorOutput::Update() {
 
     // predict
     Pose pose;
-    PredictByParticleFilter(base_timestamp_sec, base_pose, timestamp_sec,
-                            &pose);
+    PredictByImu(base_timestamp_sec, base_pose, timestamp_sec, &pose);
     // push pose to list
     predicted_.Push(timestamp_sec, pose);
 
@@ -239,7 +238,6 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
     AERROR << "Old_pose has no some fields";
     return false;
   }
-
   new_pose->CopyFrom(old_pose);
   double sensor_range = 5;
   double sigma_pos[3] = {0.03, 0.03, 0.001};
@@ -300,8 +298,17 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
   position_1.set_x(best_particle.x);
   position_1.set_y(best_particle.y);
   position_1.set_z(old_pose.position().z());
-
+  const auto& gps = dep_predicteds_[PredictorGpsName()];
+  Pose gps_pose;
+  gps.FindNearestPose(new_timestamp_sec, &gps_pose);
+  gps_pose.mutable_position()->CopyFrom(position_1);
   const auto& imu = dep_predicteds_[PredictorImuName()];
+  Pose imu_pose;
+  imu.FindNearestPose(new_timestamp_sec, &imu_pose);
+  FillPoseFromImu(imu_pose, &gps_pose);
+  new_pose->CopyFrom(gps_pose);
+
+  /*const auto& imu = dep_predicteds_[PredictorImuName()];
   auto p = imu.RangeOf(old_timestamp_sec);
   auto it = p.first;
   if (it == imu.end()) {
@@ -423,7 +430,7 @@ bool PredictorOutput::PredictByParticleFilter(double old_timestamp_sec,
       it = it_1;
       imu_pose = imu_pose_1;
     }
-  }
+  }*/
   return true;
 }
 
