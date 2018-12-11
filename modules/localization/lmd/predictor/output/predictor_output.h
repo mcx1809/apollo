@@ -79,12 +79,20 @@ class PredictorOutput : public Predictor {
                     double new_timestamp_sec, Pose *new_pose);
   bool PredictByParticleFilter(double old_timestamp_sec, const Pose &old_pose,
                                double new_timestamp_sec, Pose *new_pose);
+  bool InitSecondOrderLPFilter(double cutoff_freq);
+  double SecondOrderLPFilter(const double cur_valuer);
 
  private:
   apollo::perception::LaneMarkers lane_markers_;
   double lane_markers_time_;
   ParticleFilter pc_filter_;
   std::function<apollo::common::Status(double, const Pose &)> publish_loc_func_;
+
+  double iir_filter_bz_[3];
+  double iir_filter_az_[3];
+  double iir_filter_val_[3];
+  bool is_initfilterparam_;
+
   FRIEND_TEST(PredictorOutputTest, PredictByImu1);
   FRIEND_TEST(PredictorOutputTest, PredictByImu2);
 };

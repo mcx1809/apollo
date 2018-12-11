@@ -36,8 +36,15 @@ using apollo::common::PointENU;
 using apollo::common::Quaternion;
 using apollo::common::Status;
 using apollo::common::math::EulerAnglesZXYd;
+using apollo::common::math::HeadingToQuaternion;
+using apollo::common::math::NormalizeAngle;
 using apollo::common::math::QuaternionRotate;
 using apollo::common::math::QuaternionToHeading;
+using apollo::common::math::RotateAxis;
+
+namespace {
+constexpr double kSamplingInterval = 0.01;
+}  // namespace
 
 namespace {
 template <class T>
@@ -121,6 +128,10 @@ PredictorOutput::PredictorOutput(
   dep_predicteds_.emplace(PredictorPerceptionName(),
                           PoseList(memory_cycle_sec));
   on_adapter_thread_ = true;
+
+  constexpr double kLCutoffFreq = 20.0;
+  InitSecondOrderLPFilter(kLCutoffFreq);
+  is_initfilterparam_ = false;
 }
 
 PredictorOutput::~PredictorOutput() {}
@@ -498,26 +509,66 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
     angular_vel.set_x((angular_velocity.x() + angular_velocity_1.x()) / 2.0);
     angular_vel.set_y((angular_velocity.y() + angular_velocity_1.y()) / 2.0);
     angular_vel.set_z((angular_velocity.z() + angular_velocity_1.z()) / 2.0);
-    EulerAnglesZXYd euler_a(orientation.qw(), orientation.qx(),
-                            orientation.qy(), orientation.qz());
-    auto derivation_roll =
-        angular_vel.x() +
-        std::sin(euler_a.roll()) * std::tan(euler_a.pitch()) * angular_vel.y() +
-        std::cos(euler_a.roll()) * std::tan(euler_a.pitch()) * angular_vel.z();
-    auto derivation_pitch = std::cos(euler_a.roll()) * angular_vel.y() -
-                            std::sin(euler_a.roll()) * angular_vel.z();
-    auto derivation_yaw =
-        std::sin(euler_a.roll()) / std::cos(euler_a.pitch()) * angular_vel.y() +
-        std::cos(euler_a.roll()) / std::cos(euler_a.pitch()) * angular_vel.z();
-    EulerAnglesZXYd euler_b(euler_a.roll() + derivation_roll * dt,
-                            euler_a.pitch() + derivation_pitch * dt,
-                            euler_a.yaw() + derivation_yaw * dt);
-    auto q = euler_b.ToQuaternion();
+
+    EulerAnglesZXYd euler_c;
+    if (FLAGS_enable_gps_heading) {
+      const auto& gps = dep_predicteds_[PredictorGpsName()];
+      auto gps_latest = gps.Latest();
+      auto gps_pose = gps_latest->second;
+
+      if (!gps_pose.has_orientation()) {
+        gps_pose.CopyFrom(old_pose);
+      }
+      EulerAnglesZXYd euler_b(
+          gps_pose.orientation().qw(), gps_pose.orientation().qx(),
+          gps_pose.orientation().qy(), gps_pose.orientation().qz());
+      euler_c = euler_b;
+
+    } else {
+      EulerAnglesZXYd euler_a(orientation.qw(), orientation.qx(),
+                              orientation.qy(), orientation.qz());
+
+      auto derivation_roll = angular_vel.x() +
+                             std::sin(euler_a.roll()) *
+                                 std::tan(euler_a.pitch()) * angular_vel.y() +
+                             std::cos(euler_a.roll()) *
+                                 std::tan(euler_a.pitch()) * angular_vel.z();
+
+      auto derivation_pitch = std::cos(euler_a.roll()) * angular_vel.y() -
+                              std::sin(euler_a.roll()) * angular_vel.z();
+
+      auto derivation_yaw = std::sin(euler_a.roll()) /
+                                std::cos(euler_a.pitch()) * angular_vel.y() +
+                            std::cos(euler_a.roll()) /
+                                std::cos(euler_a.pitch()) * angular_vel.z();
+
+      EulerAnglesZXYd euler_b(euler_a.roll() + derivation_roll * dt,
+                              euler_a.pitch() + derivation_pitch * dt,
+                              euler_a.yaw() + derivation_yaw * dt);
+
+      euler_c = euler_b;
+    }
+
+    auto q = euler_c.ToQuaternion();
     Quaternion orientation_1;
     orientation_1.set_qw(q.w());
     orientation_1.set_qx(q.x());
     orientation_1.set_qy(q.y());
     orientation_1.set_qz(q.z());
+
+    if (FLAGS_enable_heading_filter) {
+      auto heading = NormalizeAngle(
+          QuaternionToHeading(orientation_1.qw(), orientation_1.qx(),
+                              orientation_1.qy(), orientation_1.qz()));
+
+      auto filtered_heading = NormalizeAngle(SecondOrderLPFilter(heading));
+
+      auto orientation_2 = HeadingToQuaternion(filtered_heading);
+      orientation_1.set_qw(orientation_2.w());
+      orientation_1.set_qx(orientation_2.x());
+      orientation_1.set_qy(orientation_2.y());
+      orientation_1.set_qz(orientation_2.z());
+    }
 
     Point3D linear_acceleration;
     if (FLAGS_enable_map_reference_unify) {
@@ -563,9 +614,11 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
 
     new_pose->mutable_position()->CopyFrom(position_1);
     new_pose->mutable_orientation()->CopyFrom(orientation_1);
-    new_pose->set_heading(QuaternionToHeading(
+
+    new_pose->set_heading(NormalizeAngle(QuaternionToHeading(
         new_pose->orientation().qw(), new_pose->orientation().qx(),
-        new_pose->orientation().qy(), new_pose->orientation().qz()));
+        new_pose->orientation().qy(), new_pose->orientation().qz())));
+
     new_pose->mutable_linear_velocity()->CopyFrom(linear_velocity_1);
     FillPoseFromImu(imu_pose_1, new_pose);
 
@@ -577,6 +630,41 @@ bool PredictorOutput::PredictByImu(double old_timestamp_sec,
   }
 
   return true;
+}
+bool PredictorOutput::InitSecondOrderLPFilter(double cutoff_freq) {
+  auto omega = 2.0 * M_PI * cutoff_freq * kSamplingInterval;
+  auto sin_o = std::sin(omega);
+  auto cos_o = std::cos(omega);
+  auto alpha = sin_o / (2.0 / std::sqrt(2));
+  iir_filter_bz_[0] = (1.0 - cos_o) / 2.0;
+  iir_filter_bz_[1] = 1.0 - cos_o;
+  iir_filter_bz_[2] = (1.0 - cos_o) / 2.0;
+  iir_filter_az_[0] = 1.0 + alpha;
+  iir_filter_az_[1] = -2.0 * cos_o;
+  iir_filter_az_[2] = 1.0 - alpha;
+  return true;
+}
+
+double PredictorOutput::SecondOrderLPFilter(const double cur_valuer) {
+  //  two-order Butterworth filter
+  // Y（n)= (b0xn + b1xn-1 + b2xn-2 - (a1xn-1 + a2*xn-2))/a0;
+  if (!is_initfilterparam_) {
+    iir_filter_val_[0] = cur_valuer;
+    iir_filter_val_[1] = cur_valuer;
+    iir_filter_val_[2] = cur_valuer;
+    is_initfilterparam_ = true;
+  } else {
+    iir_filter_val_[0] = iir_filter_val_[1];
+    iir_filter_val_[1] = iir_filter_val_[2];
+    iir_filter_val_[2] = cur_valuer;
+  }
+
+  return (iir_filter_bz_[0] * iir_filter_val_[2] +
+          iir_filter_bz_[1] * iir_filter_val_[1] +
+          iir_filter_bz_[2] * iir_filter_val_[0] -
+          (iir_filter_az_[1] * iir_filter_val_[1] +
+           iir_filter_az_[2] * iir_filter_val_[0])) /
+         iir_filter_az_[0];
 }
 
 }  // namespace localization
